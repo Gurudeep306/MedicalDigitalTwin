@@ -1,0 +1,324 @@
+{
+  "source": "BodyParts3D - The Database Center for Life Science - CC BY-SA 2.1 Japan",
+  "license": "CC BY-SA 2.1 JP",
+  "groups": {
+    "skin": [
+      {
+        "name": "Skin",
+        "bodyParts3dId": "BP10155",
+        "file": "/models/bodyparts3d/skin/FJ2810.obj",
+        "bytes": 14465506
+      }
+    ],
+    "brain": [
+      {
+        "name": "Third ventricle",
+        "bodyParts3dId": "BP6685",
+        "file": "/models/bodyparts3d/brain/FJ1730.obj",
+        "bytes": 245102
+      },
+      {
+        "name": "Fourth ventricle",
+        "bodyParts3dId": "BP6686",
+        "file": "/models/bodyparts3d/brain/FJ1731.obj",
+        "bytes": 447541
+      },
+      {
+        "name": "Hypothalamus",
+        "bodyParts3dId": "BP6690",
+        "file": "/models/bodyparts3d/brain/FJ1760.obj",
+        "bytes": 132134
+      },
+      {
+        "name": "Left lateral ventricle",
+        "bodyParts3dId": "BP10543",
+        "file": "/models/bodyparts3d/brain/FJ1767.obj",
+        "bytes": 1158410
+      },
+      {
+        "name": "Medulla oblongata",
+        "bodyParts3dId": "BP6704",
+        "file": "/models/bodyparts3d/brain/FJ1769.obj",
+        "bytes": 392222
+      },
+      {
+        "name": "Midbrain",
+        "bodyParts3dId": "BP6705",
+        "file": "/models/bodyparts3d/brain/FJ1770.obj",
+        "bytes": 468008
+      },
+      {
+        "name": "Pons",
+        "bodyParts3dId": "BP6703",
+        "file": "/models/bodyparts3d/brain/FJ1775.obj",
+        "bytes": 697138
+      },
+      {
+        "name": "Cerebellum",
+        "bodyParts3dId": "BP6702",
+        "file": "/models/bodyparts3d/brain/FJ1781.obj",
+        "bytes": 1579649
+      },
+      {
+        "name": "Right lateral ventricle",
+        "bodyParts3dId": "BP10503",
+        "file": "/models/bodyparts3d/brain/FJ1814.obj",
+        "bytes": 1168393
+      }
+    ],
+    "heart": [
+      {
+        "name": "Anterolateral head of lateral papillary muscle of left ventricle",
+        "bodyParts3dId": "BP9842",
+        "file": "/models/bodyparts3d/heart/FJ2418.obj",
+        "bytes": 54781
+      },
+      {
+        "name": "Anterior papillary muscle of right ventricle",
+        "bodyParts3dId": "BP10231",
+        "file": "/models/bodyparts3d/heart/FJ2419.obj",
+        "bytes": 59579
+      },
+      {
+        "name": "Cavity of left ventricle",
+        "bodyParts3dId": "BP10057",
+        "file": "/models/bodyparts3d/heart/FJ2422.obj",
+        "bytes": 102175
+      },
+      {
+        "name": "Cavity of right ventricle",
+        "bodyParts3dId": "BP10208",
+        "file": "/models/bodyparts3d/heart/FJ2423.obj",
+        "bytes": 113625
+      },
+      {
+        "name": "Cavity of right atrium",
+        "bodyParts3dId": "BP9906",
+        "file": "/models/bodyparts3d/heart/FJ2424.obj",
+        "bytes": 139100
+      },
+      {
+        "name": "Cavity of left atrium",
+        "bodyParts3dId": "BP9925",
+        "file": "/models/bodyparts3d/heart/FJ2425.obj",
+        "bytes": 65827
+      },
+      {
+        "name": "Lateral papillary muscle of left ventricle",
+        "bodyParts3dId": "BP9853",
+        "file": "/models/bodyparts3d/heart/FJ2429.obj",
+        "bytes": 51285
+      },
+      {
+        "name": "Posterior papillary muscle of right ventricle",
+        "bodyParts3dId": "BP9637",
+        "file": "/models/bodyparts3d/heart/FJ2430.obj",
+        "bytes": 48378
+      },
+      {
+        "name": "Septal papillary muscle of right ventricle",
+        "bodyParts3dId": "BP9594",
+        "file": "/models/bodyparts3d/heart/FJ2437.obj",
+        "bytes": 56354
+      },
+      {
+        "name": "Wall of left atrium",
+        "bodyParts3dId": "BP10221",
+        "file": "/models/bodyparts3d/heart/FJ2438.obj",
+        "bytes": 510081
+      },
+      {
+        "name": "Wall of right atrium",
+        "bodyParts3dId": "BP9921",
+        "file": "/models/bodyparts3d/heart/FJ2439.obj",
+        "bytes": 1211686
+      }
+    ],
+    "respiratory": [
+      {
+        "name": "Left main bronchus",
+        "bodyParts3dId": "BP9732",
+        "file": "/models/bodyparts3d/respiratory/FJ2450.obj",
+        "bytes": 271609
+      },
+      {
+        "name": "Right main bronchus proper",
+        "bodyParts3dId": "BP9931",
+        "file": "/models/bodyparts3d/respiratory/FJ2539.obj",
+        "bytes": 300357
+      },
+      {
+        "name": "Trachea",
+        "bodyParts3dId": "BP9373",
+        "file": "/models/bodyparts3d/respiratory/FJ2541.obj",
+        "bytes": 320946
+      },
+      {
+        "name": "Inferior lingular bronchial tree",
+        "bodyParts3dId": "BP10152",
+        "file": "/models/bodyparts3d/respiratory/FJ2441.obj",
+        "bytes": 70217
+      },
+      {
+        "name": "Left medial basal segmental bronchial tree",
+        "bodyParts3dId": "BP9943",
+        "file": "/models/bodyparts3d/respiratory/FJ2442.obj",
+        "bytes": 45226
+      },
+      {
+        "name": "Left anterior segmental bronchial tree",
+        "bodyParts3dId": "BP9474",
+        "file": "/models/bodyparts3d/respiratory/FJ2443.obj",
+        "bytes": 28512
+      },
+      {
+        "name": "Left apical segmental bronchial tree",
+        "bodyParts3dId": "BP9676",
+        "file": "/models/bodyparts3d/respiratory/FJ2444.obj",
+        "bytes": 35969
+      },
+      {
+        "name": "Left lateral basal segmental bronchial tree",
+        "bodyParts3dId": "BP10117",
+        "file": "/models/bodyparts3d/respiratory/FJ2445.obj",
+        "bytes": 38921
+      },
+      {
+        "name": "Left posterior basal segmental bronchial tree",
+        "bodyParts3dId": "BP9860",
+        "file": "/models/bodyparts3d/respiratory/FJ2446.obj",
+        "bytes": 44821
+      },
+      {
+        "name": "Left superior segmental bronchial tree",
+        "bodyParts3dId": "BP9761",
+        "file": "/models/bodyparts3d/respiratory/FJ2448.obj",
+        "bytes": 28610
+      },
+      {
+        "name": "Right anterior basal segmental bronchial tree",
+        "bodyParts3dId": "BP9684",
+        "file": "/models/bodyparts3d/respiratory/FJ2452.obj",
+        "bytes": 33256
+      },
+      {
+        "name": "Right anterior segmental bronchial tree",
+        "bodyParts3dId": "BP9525",
+        "file": "/models/bodyparts3d/respiratory/FJ2453.obj",
+        "bytes": 24913
+      },
+      {
+        "name": "Right apical segmental bronchial tree",
+        "bodyParts3dId": "BP9592",
+        "file": "/models/bodyparts3d/respiratory/FJ2454.obj",
+        "bytes": 24470
+      },
+      {
+        "name": "Right lateral basal segmental bronchial tree",
+        "bodyParts3dId": "BP9606",
+        "file": "/models/bodyparts3d/respiratory/FJ2455.obj",
+        "bytes": 41447
+      },
+      {
+        "name": "Right posterior basal segmental bronchial tree",
+        "bodyParts3dId": "BP9468",
+        "file": "/models/bodyparts3d/respiratory/FJ2457.obj",
+        "bytes": 41055
+      },
+      {
+        "name": "Right superior segmental bronchial tree",
+        "bodyParts3dId": "BP9539",
+        "file": "/models/bodyparts3d/respiratory/FJ2459.obj",
+        "bytes": 33801
+      }
+    ],
+    "liver": [
+      {
+        "name": "Caudate lobe of liver",
+        "bodyParts3dId": "BP9928",
+        "file": "/models/bodyparts3d/liver/FJ2816.obj",
+        "bytes": 317280
+      }
+    ],
+    "stomach": [
+      {
+        "name": "Stomach",
+        "bodyParts3dId": "BP9480",
+        "file": "/models/bodyparts3d/stomach/FJ2564.obj",
+        "bytes": 106977
+      }
+    ],
+    "kidneys": [
+      {
+        "name": "Left kidney",
+        "bodyParts3dId": "BP10234",
+        "file": "/models/bodyparts3d/kidneys/FJ3145.obj",
+        "bytes": 182279
+      },
+      {
+        "name": "Right kidney",
+        "bodyParts3dId": "BP10046",
+        "file": "/models/bodyparts3d/kidneys/FJ3147.obj",
+        "bytes": 139399
+      }
+    ],
+    "intestine": [
+      {
+        "name": "Mesentery of small intestine",
+        "bodyParts3dId": "BP10169",
+        "file": "/models/bodyparts3d/intestine/FJ3396.obj",
+        "bytes": 4629923
+      }
+    ],
+    "vessels": [
+      {
+        "name": "Descending thoracic aorta",
+        "bodyParts3dId": "BP6895",
+        "file": "/models/bodyparts3d/vessels/FJ1931.obj",
+        "bytes": 142154
+      },
+      {
+        "name": "Abdominal aorta",
+        "bodyParts3dId": "BP6896",
+        "file": "/models/bodyparts3d/vessels/FJ1932.obj",
+        "bytes": 141421
+      },
+      {
+        "name": "Arch of aorta",
+        "bodyParts3dId": "BP10404",
+        "file": "/models/bodyparts3d/vessels/FJ3411.obj",
+        "bytes": 41746
+      },
+      {
+        "name": "Ascending aorta",
+        "bodyParts3dId": "BP10408",
+        "file": "/models/bodyparts3d/vessels/FJ3413.obj",
+        "bytes": 24689
+      },
+      {
+        "name": "Descending aorta",
+        "bodyParts3dId": "BP10373",
+        "file": "/models/bodyparts3d/vessels/FJ3427.obj",
+        "bytes": 289233
+      },
+      {
+        "name": "Left pulmonary artery",
+        "bodyParts3dId": "BP9414",
+        "file": "/models/bodyparts3d/vessels/FJ2924.obj",
+        "bytes": 342261
+      },
+      {
+        "name": "Right pulmonary artery",
+        "bodyParts3dId": "BP9427",
+        "file": "/models/bodyparts3d/vessels/FJ3019.obj",
+        "bytes": 39751
+      },
+      {
+        "name": "Pulmonary trunk",
+        "bodyParts3dId": "BP9912",
+        "file": "/models/bodyparts3d/vessels/FJ2966.obj",
+        "bytes": 89643
+      }
+    ]
+  }
+}

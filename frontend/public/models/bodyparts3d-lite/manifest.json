@@ -1,0 +1,68 @@
+[
+  {
+    "group": "skin",
+    "file": "FJ2810.obj",
+    "outVertices": 5036,
+    "outFaces": 1695
+  },
+  {
+    "group": "brain",
+    "file": "FJ1781.obj",
+    "outVertices": 2526,
+    "outFaces": 883
+  },
+  {
+    "group": "heart",
+    "file": "FJ2439.obj",
+    "outVertices": 2728,
+    "outFaces": 988
+  },
+  {
+    "group": "respiratory",
+    "file": "FJ2541.obj",
+    "outVertices": 1837,
+    "outFaces": 833
+  },
+  {
+    "group": "liver",
+    "file": "FJ2816.obj",
+    "outVertices": 1824,
+    "outFaces": 837
+  },
+  {
+    "group": "stomach",
+    "file": "FJ2564.obj",
+    "outVertices": 870,
+    "outFaces": 604
+  },
+  {
+    "group": "kidneys",
+    "file": "FJ3145.obj",
+    "outVertices": 1331,
+    "outFaces": 746
+  },
+  {
+    "group": "kidneys",
+    "file": "FJ3147.obj",
+    "outVertices": 1108,
+    "outFaces": 770
+  },
+  {
+    "group": "intestine",
+    "file": "FJ3396.obj",
+    "outVertices": 2640,
+    "outFaces": 891
+  },
+  {
+    "group": "vessels",
+    "file": "FJ1932.obj",
+    "outVertices": 1130,
+    "outFaces": 757
+  },
+  {
+    "group": "vessels",
+    "file": "FJ2966.obj",
+    "outVertices": 791,
+    "outFaces": 651
+  }
+]
