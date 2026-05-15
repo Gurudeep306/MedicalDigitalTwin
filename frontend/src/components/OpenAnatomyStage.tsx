@@ -1,10 +1,24 @@
 'use client'
 
 import { Canvas, useFrame, useLoader } from '@react-three/fiber'
-import { ContactShadows, Html, Line, OrbitControls, useProgress } from '@react-three/drei'
+import { Html, OrbitControls, useProgress } from '@react-three/drei'
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
 import { Suspense, useMemo, useRef, useState, useEffect } from 'react'
 import * as THREE from 'three'
+import AnimationControlWindow from './AnimationControlWindow'
+import {
+  ANATOMY_ASSETS,
+  ANATOMY_OFFSET,
+  ANATOMY_SCALE,
+  groupStyle,
+  organPosition,
+  renderOrderForAsset,
+  shouldRenderAsset,
+  type AnatomyAsset,
+  type OrganGroup,
+} from '@/lib/anatomy-catalog'
+import { createOrganMaterial, polishGeometry, type OrganMaterial } from '@/lib/anatomy-materials'
+import { animationScenarios } from '@/lib/imported-animations'
 
 type HumanSignals = {
   bmi: number
@@ -27,39 +41,6 @@ type HumanProfile = {
   organConditions: string[]
 }
 
-type OrganGroup =
-  | 'skin'
-  | 'brain'
-  | 'heart'
-  | 'respiratory'
-  | 'lungs'
-  | 'liver'
-  | 'gallbladder'
-  | 'stomach'
-  | 'pancreas'
-  | 'spleen'
-  | 'kidneys'
-  | 'intestine'
-  | 'largeIntestine'
-  | 'appendix'
-  | 'bladder'
-  | 'vessels'
-  | 'skeleton'
-  | 'spinalCord'
-  | 'diaphragm'
-  | 'eyes'
-  | 'tongue'
-  | 'adrenal'
-  | 'prostate'
-  | 'reproductive'
-
-type AnatomyAsset = {
-  group: OrganGroup
-  name: string
-  file: string
-  opacity?: number
-}
-
 type MedicineProfile = {
   color: string
   route: 'oral' | 'inhaled' | 'injection'
@@ -80,70 +61,6 @@ type OpenAnatomyStageProps = {
   focusMode?: 'overview' | 'pathway' | 'sideEffects'
 }
 
-const ANATOMY_CENTER: [number, number, number] = [-1.15, -100.6, 781.7]
-const ANATOMY_SCALE = 0.00122
-const ANATOMY_OFFSET: [number, number, number] = [-ANATOMY_CENTER[0], -ANATOMY_CENTER[1], -ANATOMY_CENTER[2]]
-
-const asset = (group: OrganGroup, name: string, file: string, opacity?: number): AnatomyAsset => ({ group, name, file, opacity })
-
-const realAnatomyAssets: AnatomyAsset[] = [
-  asset('skin', 'Full body skin surface', '/models/bodyparts3d/skin/FJ2810.obj', 0.045),
-  asset('brain', 'Cerebellum', '/models/bodyparts3d/brain/FJ1781.obj'),
-  asset('brain', 'Medulla oblongata', '/models/bodyparts3d/brain/FJ1769.obj'),
-  asset('brain', 'Pons', '/models/bodyparts3d/brain/FJ1775.obj'),
-  asset('heart', 'Wall of right atrium', '/models/bodyparts3d/heart/FJ2439.obj'),
-  asset('heart', 'Wall of left atrium', '/models/bodyparts3d/heart/FJ2438.obj'),
-  asset('respiratory', 'Trachea', '/models/bodyparts3d/respiratory/FJ2541.obj'),
-  asset('respiratory', 'Left main bronchus', '/models/bodyparts3d/respiratory/FJ2450.obj'),
-  asset('respiratory', 'Right main bronchus', '/models/bodyparts3d/respiratory/FJ2539.obj'),
-  asset('lungs', 'Left bronchial tree', '/models/bodyparts3d/lungs/FJ2479.obj'),
-  asset('lungs', 'Right bronchial tree', '/models/bodyparts3d/lungs/FJ2481.obj'),
-  asset('liver', 'Liver segment II', '/models/bodyparts3d/liver/FJ2818.obj'),
-  asset('liver', 'Liver segment III', '/models/bodyparts3d/liver/FJ2819.obj'),
-  asset('liver', 'Liver segment IV', '/models/bodyparts3d/liver/FJ2820.obj'),
-  asset('liver', 'Liver segment V', '/models/bodyparts3d/liver/FJ2821.obj'),
-  asset('liver', 'Liver segment VI', '/models/bodyparts3d/liver/FJ2822.obj'),
-  asset('gallbladder', 'Gallbladder', '/models/bodyparts3d/gallbladder/FJ2817.obj'),
-  asset('stomach', 'Stomach', '/models/bodyparts3d/stomach/FJ2564.obj'),
-  asset('pancreas', 'Pancreas', '/models/bodyparts3d/pancreas/FJ1895.obj'),
-  asset('pancreas', 'Pancreatic duct tree', '/models/bodyparts3d/pancreas/FJ2630.obj'),
-  asset('spleen', 'Spleen', '/models/bodyparts3d/spleen/FJ2561.obj'),
-  asset('kidneys', 'Left kidney', '/models/bodyparts3d/kidneys/FJ3145.obj'),
-  asset('kidneys', 'Right kidney', '/models/bodyparts3d/kidneys/FJ3147.obj'),
-  asset('intestine', 'Duodenum', '/models/bodyparts3d/small-intestine/FJ2573.obj'),
-  asset('intestine', 'Jejunum section', '/models/bodyparts3d/small-intestine/FJ2606.obj'),
-  asset('intestine', 'Ileum section', '/models/bodyparts3d/small-intestine/FJ2589.obj'),
-  asset('intestine', 'Small intestine mesentery', '/models/bodyparts3d/intestine/FJ3396.obj', 0.5),
-  asset('largeIntestine', 'Ascending colon', '/models/bodyparts3d/large-intestine/FJ2566.obj'),
-  asset('largeIntestine', 'Descending colon', '/models/bodyparts3d/large-intestine/FJ2567.obj'),
-  asset('largeIntestine', 'Transverse colon', '/models/bodyparts3d/large-intestine/FJ2572.obj'),
-  asset('largeIntestine', 'Rectum', '/models/bodyparts3d/large-intestine/FJ2571.obj'),
-  asset('appendix', 'Appendix', '/models/bodyparts3d/large-intestine/FJ2565.obj'),
-  asset('bladder', 'Urinary bladder', '/models/bodyparts3d/bladder/FJ3149.obj'),
-  asset('vessels', 'Abdominal aorta', '/models/bodyparts3d/vessels/FJ1932.obj'),
-  asset('vessels', 'Descending thoracic aorta', '/models/bodyparts3d/vessels/FJ1931.obj'),
-  asset('vessels', 'Descending aorta', '/models/bodyparts3d/vessels/FJ3427.obj'),
-  asset('vessels', 'Pulmonary trunk', '/models/bodyparts3d/vessels/FJ2966.obj'),
-  asset('vessels', 'Left pulmonary artery', '/models/bodyparts3d/vessels/FJ2924.obj'),
-  asset('vessels', 'Right pulmonary artery', '/models/bodyparts3d/vessels/FJ3019.obj'),
-  asset('skeleton', 'Sternum', '/models/bodyparts3d/skeleton/FJ3178.obj', 0.55),
-  asset('skeleton', 'Atlas', '/models/bodyparts3d/skeleton/FJ3176.obj', 0.48),
-  asset('skeleton', 'Axis', '/models/bodyparts3d/skeleton/FJ3177.obj', 0.48),
-  asset('skeleton', 'Cervical vertebra', '/models/bodyparts3d/skeleton/FJ3167.obj', 0.48),
-  asset('skeleton', 'Thoracic vertebra', '/models/bodyparts3d/skeleton/FJ3166.obj', 0.48),
-  asset('skeleton', 'Lumbar vertebra', '/models/bodyparts3d/skeleton/FJ3162.obj', 0.48),
-  asset('spinalCord', 'Central canal of spinal cord', '/models/bodyparts3d/spinal-cord/FJ1737.obj'),
-  asset('diaphragm', 'Diaphragm', '/models/bodyparts3d/diaphragm/FJ3131.obj', 0.52),
-  asset('adrenal', 'Left adrenal gland', '/models/bodyparts3d/adrenal/FJ3129.obj'),
-  asset('adrenal', 'Right adrenal gland', '/models/bodyparts3d/adrenal/FJ3130.obj'),
-  asset('eyes', 'Left sclera', '/models/bodyparts3d/eyes/FJ1317.obj'),
-  asset('eyes', 'Right choroid', '/models/bodyparts3d/eyes/FJ1336.obj'),
-  asset('tongue', 'Tongue', '/models/bodyparts3d/tongue/FJ2761.obj'),
-  asset('prostate', 'Prostate', '/models/bodyparts3d/prostate/FJ3139.obj'),
-  asset('reproductive', 'Left testis', '/models/bodyparts3d/reproductive/FJ3138.obj'),
-  asset('reproductive', 'Right testis', '/models/bodyparts3d/reproductive/FJ3142.obj'),
-]
-
 const timelineEffect: Record<string, number> = {
   '1 day': 0.12,
   '1 week': 0.24,
@@ -151,96 +68,46 @@ const timelineEffect: Record<string, number> = {
   '6 months': 0.56,
   '1 year': 0.72,
   '5 years': 1,
+  '10 years': 1.18,
 }
 
-const groupStyle: Record<OrganGroup, { color: string; opacity: number }> = {
-  skin: { color: '#d8a48e', opacity: 0.12 },
-  brain: { color: '#df66ae', opacity: 0.98 },
-  heart: { color: '#df2638', opacity: 0.98 },
-  respiratory: { color: '#4aa3ff', opacity: 0.93 },
-  lungs: { color: '#7bc8ff', opacity: 0.86 },
-  liver: { color: '#a23d2f', opacity: 0.98 },
-  gallbladder: { color: '#60bf70', opacity: 0.96 },
-  stomach: { color: '#f18f36', opacity: 0.95 },
-  pancreas: { color: '#f2c36f', opacity: 0.94 },
-  spleen: { color: '#954091', opacity: 0.95 },
-  kidneys: { color: '#b455a3', opacity: 0.95 },
-  intestine: { color: '#f2a15b', opacity: 0.82 },
-  largeIntestine: { color: '#de7f45', opacity: 0.9 },
-  appendix: { color: '#ef8b5c', opacity: 0.9 },
-  bladder: { color: '#efd769', opacity: 0.92 },
-  vessels: { color: '#cf1d31', opacity: 0.9 },
-  skeleton: { color: '#efe6d5', opacity: 0.44 },
-  spinalCord: { color: '#ffe6a7', opacity: 0.96 },
-  diaphragm: { color: '#bc91df', opacity: 0.62 },
-  eyes: { color: '#9ed2ff', opacity: 0.88 },
-  tongue: { color: '#d95f7d', opacity: 0.94 },
-  adrenal: { color: '#f6bf5a', opacity: 0.94 },
-  prostate: { color: '#9486ff', opacity: 0.86 },
-  reproductive: { color: '#9ad7cb', opacity: 0.82 },
+const effectCalloutOffset: Partial<Record<Exclude<OrganGroup, 'skin'>, [number, number, number]>> = {
+  brain: [235, -18, 92],
+  heart: [205, -42, 34],
+  respiratory: [190, -34, 86],
+  lungs: [205, -58, 54],
+  esophagus: [-198, -32, 78],
+  liver: [205, -26, 48],
+  stomach: [-215, -26, 36],
+  pancreas: [190, -58, 24],
+  kidneys: [196, 28, 12],
+  intestine: [-205, -14, -26],
+  largeIntestine: [178, 0, -32],
+  bladder: [-182, 6, -36],
+  vessels: [202, 6, 76],
+  adrenal: [-190, 32, 20],
 }
-
-const organPosition: Record<Exclude<OrganGroup, 'skin'>, [number, number, number]> = {
-  brain: [0, -42, 1514],
-  heart: [-12, -128, 1230],
-  respiratory: [0, -94, 1340],
-  lungs: [0, -110, 1268],
-  liver: [54, -124, 1110],
-  gallbladder: [70, -130, 1060],
-  stomach: [-42, -140, 1095],
-  pancreas: [20, -126, 1035],
-  spleen: [-116, -124, 1040],
-  kidneys: [0, -86, 1028],
-  intestine: [0, -145, 915],
-  largeIntestine: [8, -138, 810],
-  appendix: [-48, -138, 760],
-  bladder: [0, -160, 650],
-  vessels: [0, -118, 1135],
-  skeleton: [0, -122, 1130],
-  spinalCord: [0, -150, 1180],
-  diaphragm: [0, -122, 1070],
-  eyes: [0, -148, 1510],
-  tongue: [0, -150, 1435],
-  adrenal: [0, -90, 1058],
-  prostate: [0, -156, 690],
-  reproductive: [0, -160, 600],
-}
-
-const labelPoints: Array<{ group: Exclude<OrganGroup, 'skin'>; label: string; position: [number, number, number] }> = [
-  { group: 'brain', label: 'Brain', position: [86, -46, 1530] },
-  { group: 'heart', label: 'Heart', position: [94, -126, 1228] },
-  { group: 'respiratory', label: 'Trachea', position: [68, -94, 1365] },
-  { group: 'lungs', label: 'Bronchi', position: [118, -110, 1275] },
-  { group: 'liver', label: 'Liver', position: [165, -122, 1110] },
-  { group: 'stomach', label: 'Stomach', position: [-142, -140, 1084] },
-  { group: 'pancreas', label: 'Pancreas', position: [110, -126, 1030] },
-  { group: 'kidneys', label: 'Kidneys', position: [134, -86, 1016] },
-  { group: 'intestine', label: 'Small intestine', position: [-150, -145, 895] },
-  { group: 'largeIntestine', label: 'Colon', position: [142, -138, 805] },
-  { group: 'bladder', label: 'Bladder', position: [76, -160, 650] },
-  { group: 'skeleton', label: 'Spine', position: [-148, -122, 1160] },
-]
 
 const medicineProfiles: Record<string, MedicineProfile> = {
   Ibuprofen: {
     color: '#ff8f70',
     route: 'oral',
-    target: ['stomach', 'intestine', 'largeIntestine', 'liver', 'kidneys', 'vessels'],
-    path: [[0, -180, 1460], [0, -148, 1250], [-42, -140, 1095], [0, -145, 915], [54, -124, 1110], [0, -86, 1028], [0, -160, 650]],
+    target: ['esophagus', 'stomach', 'intestine', 'largeIntestine', 'liver', 'kidneys', 'vessels'],
+    path: [[0, -180, 1460], [0, -148, 1305], [0, -142, 1240], [-42, -140, 1095], [0, -145, 915], [54, -124, 1110], [0, -86, 1028], [0, -160, 650]],
     copy: 'oral absorption, stomach irritation risk, liver processing, kidney clearance',
   },
   Metformin: {
-    color: '#53c7ff',
+    color: '#ffa366',
     route: 'oral',
-    target: ['stomach', 'intestine', 'largeIntestine', 'liver', 'pancreas', 'kidneys', 'vessels'],
-    path: [[0, -180, 1460], [0, -148, 1250], [-42, -140, 1095], [0, -145, 915], [8, -138, 810], [54, -124, 1110], [20, -126, 1035], [0, -118, 1135]],
+    target: ['esophagus', 'stomach', 'intestine', 'largeIntestine', 'liver', 'pancreas', 'kidneys', 'vessels'],
+    path: [[0, -180, 1460], [0, -148, 1305], [0, -142, 1240], [-42, -140, 1095], [0, -145, 915], [8, -138, 810], [54, -124, 1110], [20, -126, 1035], [0, -118, 1135]],
     copy: 'gut absorption, liver glucose response, kidney dosing sensitivity',
   },
   Atorvastatin: {
     color: '#b89cff',
     route: 'oral',
-    target: ['stomach', 'intestine', 'liver', 'heart', 'vessels', 'kidneys'],
-    path: [[0, -180, 1460], [0, -148, 1250], [-42, -140, 1095], [0, -145, 915], [54, -124, 1110], [-12, -128, 1230], [0, -118, 1135]],
+    target: ['esophagus', 'stomach', 'intestine', 'liver', 'heart', 'vessels', 'kidneys'],
+    path: [[0, -180, 1460], [0, -148, 1305], [0, -142, 1240], [-42, -140, 1095], [0, -145, 915], [54, -124, 1110], [-12, -128, 1230], [0, -118, 1135]],
     copy: 'intestinal uptake, liver enzyme work, vessel protection over time',
   },
   Albuterol: {
@@ -251,38 +118,38 @@ const medicineProfiles: Record<string, MedicineProfile> = {
     copy: 'inhaled airway delivery, bronchodilation, heart-rate sensitivity',
   },
   Lisinopril: {
-    color: '#7dd3fc',
+    color: '#ffb380',
     route: 'oral',
     target: ['vessels', 'heart', 'kidneys', 'brain'],
-    path: [[0, -180, 1460], [0, -148, 1250], [-42, -140, 1095], [0, -118, 1135], [-12, -128, 1230], [0, -86, 1028]],
+    path: [[0, -180, 1460], [0, -148, 1305], [0, -142, 1240], [-42, -140, 1095], [0, -118, 1135], [-12, -128, 1230], [0, -86, 1028]],
     copy: 'blood pressure pathway, vessel relaxation, kidney monitoring',
   },
   Amlodipine: {
     color: '#f59e0b',
     route: 'oral',
     target: ['vessels', 'heart', 'liver'],
-    path: [[0, -180, 1460], [0, -148, 1250], [-42, -140, 1095], [0, -118, 1135], [-12, -128, 1230], [54, -124, 1110]],
+    path: [[0, -180, 1460], [0, -148, 1305], [0, -142, 1240], [-42, -140, 1095], [0, -118, 1135], [-12, -128, 1230], [54, -124, 1110]],
     copy: 'calcium-channel effect, arterial relaxation, ankle swelling risk',
   },
   Amoxicillin: {
     color: '#34d399',
     route: 'oral',
-    target: ['stomach', 'intestine', 'liver', 'kidneys', 'skin', 'vessels'],
-    path: [[0, -180, 1460], [0, -148, 1250], [-42, -140, 1095], [0, -145, 915], [54, -124, 1110], [0, -86, 1028], [0, -118, 1135]],
+    target: ['esophagus', 'stomach', 'intestine', 'liver', 'kidneys', 'skin', 'vessels'],
+    path: [[0, -180, 1460], [0, -148, 1305], [0, -142, 1240], [-42, -140, 1095], [0, -145, 915], [54, -124, 1110], [0, -86, 1028], [0, -118, 1135]],
     copy: 'gut absorption, bloodstream distribution, allergy and rash monitoring',
   },
   Omeprazole: {
     color: '#f97316',
     route: 'oral',
-    target: ['stomach', 'liver', 'kidneys', 'intestine'],
-    path: [[0, -180, 1460], [0, -148, 1250], [-42, -140, 1095], [54, -124, 1110], [0, -145, 915], [0, -86, 1028]],
+    target: ['esophagus', 'stomach', 'liver', 'kidneys', 'intestine'],
+    path: [[0, -180, 1460], [0, -148, 1305], [0, -142, 1240], [-42, -140, 1095], [54, -124, 1110], [0, -145, 915], [0, -86, 1028]],
     copy: 'acid suppression, stomach lining relief, long-term mineral monitoring',
   },
   Prednisone: {
     color: '#fb7185',
     route: 'oral',
-    target: ['lungs', 'respiratory', 'vessels', 'brain', 'stomach', 'liver', 'adrenal'],
-    path: [[0, -180, 1460], [0, -148, 1250], [-42, -140, 1095], [0, -118, 1135], [0, -42, 1514], [54, -124, 1110], [0, -90, 1058]],
+    target: ['lungs', 'respiratory', 'vessels', 'brain', 'esophagus', 'stomach', 'liver', 'adrenal'],
+    path: [[0, -180, 1460], [0, -148, 1305], [0, -142, 1240], [-42, -140, 1095], [0, -118, 1135], [0, -42, 1514], [54, -124, 1110], [0, -90, 1058]],
     copy: 'systemic anti-inflammatory effect, mood, glucose, stomach and adrenal monitoring',
   },
   'Insulin glargine': {
@@ -301,6 +168,7 @@ function normalizeOrgan(value: string): OrganGroup | null {
   if (clean.includes('heart') || clean.includes('cardiac')) return 'heart'
   if (clean.includes('airway')) return 'respiratory'
   if (clean.includes('lung') || clean.includes('asthma') || clean.includes('breath')) return 'lungs'
+  if (clean.includes('esophagus') || clean.includes('oesophagus') || clean.includes('swallow')) return 'esophagus'
   if (clean.includes('liver') || clean.includes('cholesterol')) return 'liver'
   if (clean.includes('stomach') || clean.includes('reflux') || clean.includes('acid') || clean.includes('ulcer')) return 'stomach'
   if (clean.includes('pancreas') || clean.includes('diabetes') || clean.includes('glucose')) return 'pancreas'
@@ -312,68 +180,120 @@ function normalizeOrgan(value: string): OrganGroup | null {
   return null
 }
 
+function bodyCategory(profile: HumanProfile) {
+  if (profile.age < 13) return 'child anatomy'
+  if (profile.age < 18) return 'adolescent anatomy'
+  if (profile.age >= 65) return 'senior anatomy'
+  if (profile.gender === 'Female') return 'adult female anatomy'
+  if (profile.gender === 'Male') return 'adult male anatomy'
+  return 'adult anatomy'
+}
+
+function categoryScale(profile: HumanProfile, signals: HumanSignals): [number, number, number] {
+  const childScale = profile.age < 13 ? 0.66 : profile.age < 18 ? 0.8 : 1
+  const sexScaleX = profile.gender === 'Female' ? 0.91 : profile.gender === 'Male' ? 1.04 : 0.98
+  const bodyTypeScale = profile.bodyType === 'Athletic' ? 1.035 : profile.bodyType === 'Lean' ? 0.94 : profile.bodyType === 'Heavy' ? 1.13 : profile.bodyType === 'Soft' ? 1.07 : 1
+  const seniorPosture = profile.age >= 65 ? 0.985 : 1
+  const fatigueLean = 1 - signals.fatigue * 0.035
+
+  return [sexScaleX * bodyTypeScale * childScale, fatigueLean * childScale * seniorPosture, bodyTypeScale * childScale]
+}
+
+function sideEffectRisk(group: OrganGroup, intensity: number, profile: HumanProfile, signals: HumanSignals, medicineProfile?: MedicineProfile) {
+  if (!medicineProfile?.target.includes(group)) return 0
+
+  const conditionMatch = [...profile.organConditions, ...profile.diseases].some((item) => normalizeOrgan(item) === group)
+  const clearanceOrgan = group === 'liver' || group === 'kidneys' || group === 'vessels'
+  const mucosalOrgan = group === 'stomach' || group === 'intestine' || group === 'largeIntestine' || group === 'esophagus'
+  const sensitivity = clearanceOrgan ? 0.16 : group === 'heart' || group === 'brain' ? 0.12 : 0.08
+  const ageRisk = profile.age >= 65 ? 0.12 : profile.age < 13 ? 0.08 : 0
+  const risk = 0.18 + intensity * 0.54 + signals.organLoad * 0.18 + signals.diseaseLoad * 0.12 + sensitivity + ageRisk + (mucosalOrgan ? 0.08 : 0) + (conditionMatch ? 0.14 : 0)
+
+  return Math.min(1, risk)
+}
+
 function RealAnatomyMesh({
   asset,
   targeted,
   dimmed,
+  overviewMode,
   medicineColor,
   intensity,
+  sideEffectMode,
+  riskLevel,
   skinOpacity,
   isPlaying,
+  heartRate,
+  breathingRate,
 }: {
   asset: AnatomyAsset
   targeted: boolean
   dimmed: boolean
+  overviewMode: boolean
   medicineColor: string
   intensity: number
+  sideEffectMode: boolean
+  riskLevel: number
   skinOpacity: number
   isPlaying: boolean
+  heartRate: number
+  breathingRate: number
 }) {
   const object = useLoader(OBJLoader, asset.file)
   const groupRef = useRef<THREE.Group>(null)
-  const materialsRef = useRef<THREE.MeshStandardMaterial[]>([])
-  const stateRef = useRef({ targeted, dimmed, medicineColor, intensity, skinOpacity, isPlaying })
+  const materialsRef = useRef<OrganMaterial[]>([])
+  const stateRef = useRef({
+    targeted,
+    dimmed,
+    overviewMode,
+    medicineColor,
+    intensity,
+    sideEffectMode,
+    riskLevel,
+    skinOpacity,
+    isPlaying,
+    heartRate,
+    breathingRate,
+  })
 
-  // Update state ref without triggering re-renders
   useEffect(() => {
-    stateRef.current = { targeted, dimmed, medicineColor, intensity, skinOpacity, isPlaying }
-  }, [targeted, dimmed, medicineColor, intensity, skinOpacity, isPlaying])
+    stateRef.current = {
+      targeted,
+      dimmed,
+      overviewMode,
+      medicineColor,
+      intensity,
+      sideEffectMode,
+      riskLevel,
+      skinOpacity,
+      isPlaying,
+      heartRate,
+      breathingRate,
+    }
+  }, [targeted, dimmed, overviewMode, medicineColor, intensity, sideEffectMode, riskLevel, skinOpacity, isPlaying, heartRate, breathingRate])
 
   const prepared = useMemo(() => {
     const clone = object.clone()
-    const style = groupStyle[asset.group]
-    const materials: THREE.MeshStandardMaterial[] = []
+    const materials: OrganMaterial[] = []
 
     clone.traverse((child) => {
       const mesh = child as THREE.Mesh
       if (!mesh.isMesh) return
 
-      mesh.geometry.computeVertexNormals()
-      mesh.geometry.normalizeNormals()
-      mesh.castShadow = asset.group !== 'skin'
-      mesh.receiveShadow = true
+      polishGeometry(mesh.geometry)
+      mesh.castShadow = false
+      mesh.receiveShadow = false
       mesh.frustumCulled = false
 
-      const isSkin = asset.group === 'skin'
-      const material = new THREE.MeshStandardMaterial({
-        color: new THREE.Color(style.color),
-        transparent: true,
-        opacity: asset.opacity ?? style.opacity, // Use default style opacity
-        emissive: new THREE.Color(style.color),
-        emissiveIntensity: isSkin ? 0.02 : 0.07,
-        roughness: isSkin ? 0.56 : 0.42,
-        metalness: 0.02,
-        side: THREE.DoubleSide,
-        depthWrite: !isSkin,
-      })
-
+      const material = createOrganMaterial(asset)
+      mesh.renderOrder = renderOrderForAsset(asset)
       mesh.material = material
       materials.push(material)
     })
 
     materialsRef.current = materials
     return clone
-  }, [object, asset.group])
+  }, [object, asset])
 
   useFrame(({ clock }) => {
     if (!groupRef.current || !materialsRef.current.length) return
@@ -383,12 +303,26 @@ function RealAnatomyMesh({
     const style = groupStyle[asset.group]
     const isSkin = asset.group === 'skin'
 
-    // Animation motions
-    const respiratoryMotion = asset.group === 'lungs' || asset.group === 'respiratory' ? Math.sin(phase * 1.5) * 0.014 : 0
-    const heartMotion = asset.group === 'heart' || asset.group === 'vessels' ? Math.sin(phase * 5.6) * 0.012 : 0
-    const targetPulse = state.targeted && state.isPlaying ? Math.max(0, Math.sin(phase * 3.2)) * 0.018 * (1 + state.intensity) : 0
+    const heartHz = (state.heartRate || 72) / 60
+    const breathHz = (state.breathingRate || 14) / 60
+    const respiratoryMotion =
+      asset.group === 'lungs' || asset.group === 'respiratory' || asset.group === 'diaphragm'
+        ? Math.sin(phase * breathHz * Math.PI * 2) * 0.018
+        : 0
+    const heartMotion =
+      asset.group === 'heart' || asset.group === 'vessels'
+        ? Math.sin(phase * heartHz * Math.PI * 2) * 0.014
+        : 0
+    const targetPulse = state.targeted && state.isPlaying ? (0.5 + Math.sin(phase * 1.9) * 0.5) * 0.01 * (1 + state.intensity) : 0
+    const sideEffectSwelling = state.sideEffectMode && state.targeted ? state.riskLevel * 0.035 : 0
+    const baseScale = 1 + respiratoryMotion + heartMotion + targetPulse
+    const shapeSag = state.sideEffectMode && state.targeted ? state.riskLevel * 0.018 : 0
 
-    groupRef.current.scale.setScalar(1 + respiratoryMotion + heartMotion + targetPulse)
+    groupRef.current.scale.set(
+      baseScale + sideEffectSwelling,
+      baseScale - shapeSag,
+      baseScale + sideEffectSwelling * 0.72,
+    )
 
     // Update each material
     materialsRef.current.forEach((material) => {
@@ -397,23 +331,31 @@ function RealAnatomyMesh({
       if (isSkin) {
         opacity = state.skinOpacity
       } else if (state.dimmed) {
-        opacity = 0.16
+        opacity = state.sideEffectMode ? 0.14 : state.overviewMode ? 0.26 : 0.1
       } else {
         opacity = asset.opacity ?? style.opacity
       }
       material.opacity = opacity
+      material.transparent = opacity < 0.99
+      material.depthWrite = opacity >= 0.9 || (isSkin && opacity >= 0.38)
 
       // Calculate and set color
-      const color = state.targeted ? state.medicineColor : style.color
+      let color = state.targeted ? state.medicineColor : style.color
+      if (state.sideEffectMode && state.targeted) {
+        color = state.riskLevel > 0.78 ? '#ff5533' : state.riskLevel > 0.56 ? '#ff9f1c' : '#ffe066'
+      }
       material.color.setStyle(color)
       material.emissive.setStyle(color)
 
       // Calculate and set emissive intensity
       let emissiveIntensity: number
       if (state.targeted) {
-        emissiveIntensity = 0.22 + Math.max(0, Math.sin(phase * 3.2)) * 0.28 + state.intensity * 0.14
+        const pulse = state.isPlaying ? (0.5 + Math.sin(phase * 1.9) * 0.5) : 0.45
+        emissiveIntensity = state.sideEffectMode
+          ? 0.28 + pulse * 0.22 + state.riskLevel * 0.22
+          : 0.18 + pulse * 0.18 + state.intensity * 0.12
       } else {
-        emissiveIntensity = isSkin ? 0.02 : 0.07
+        emissiveIntensity = state.dimmed ? 0.02 : isSkin ? 0.06 + Math.min(state.skinOpacity, 1) * 0.14 : 0.07
       }
       material.emissiveIntensity = emissiveIntensity
     })
@@ -426,77 +368,368 @@ function RealAnatomyMesh({
   )
 }
 
+function smoothStep(t: number) {
+  const x = THREE.MathUtils.clamp(t, 0, 1)
+  return x * x * (3 - 2 * x)
+}
+
+function sampleMedicinePath(path: [number, number, number][], raw: number) {
+  const wrapped = ((raw % 1) + 1) % 1
+  const segment = Math.min(path.length - 2, Math.floor(wrapped * (path.length - 1)))
+  const segmentT = wrapped * (path.length - 1) - segment
+  const easedT = smoothStep(segmentT)
+  const start = new THREE.Vector3(...path[segment])
+  const end = new THREE.Vector3(...path[segment + 1])
+  return start.lerp(end, easedT)
+}
+
 function MedicineFlow({ profile, timeLabel, isPlaying, speed }: { profile?: MedicineProfile; timeLabel: string; isPlaying: boolean; speed: number }) {
-  const dotRef = useRef<THREE.Mesh>(null)
+  const markerRef = useRef<THREE.Group>(null)
+  const capsuleCoreRef = useRef<THREE.Group>(null)
+  const pulseRef = useRef<THREE.Mesh>(null)
   const haloRef = useRef<THREE.Mesh>(null)
+  const trailRefs = useRef<THREE.Mesh[]>([])
+  const routeRefs = useRef<THREE.Mesh[]>([])
+  const vesselRefs = useRef<THREE.Mesh[]>([])
+  const waypointRefs = useRef<THREE.Mesh[]>([])
   const progressRef = useRef(0)
   const strength = timelineEffect[timeLabel] ?? 0.2
+  const trailCount = 26
+  const routeCount = 40
 
-  useFrame((_, delta) => {
-    if (!profile || !dotRef.current || !haloRef.current) return
-    if (isPlaying) progressRef.current = (progressRef.current + delta * speed * (0.14 + strength * 0.08)) % 1
+  useFrame((state, delta) => {
+    if (!profile || !markerRef.current) return
+    if (isPlaying) {
+      const wander = Math.sin(progressRef.current * Math.PI * 6) * 0.022
+      progressRef.current = (progressRef.current + delta * speed * (0.11 + strength * 0.1 + wander)) % 1
+    }
 
     const path = profile.path
+    const placeOnPath = (value: number) => sampleMedicinePath(path, value)
+
     const raw = progressRef.current
-    const segment = Math.min(path.length - 2, Math.floor(raw * (path.length - 1)))
-    const segmentT = raw * (path.length - 1) - segment
-    const start = new THREE.Vector3(...path[segment])
-    const end = new THREE.Vector3(...path[segment + 1])
-    const position = start.lerp(end, segmentT)
-    dotRef.current.position.copy(position)
-    haloRef.current.position.copy(position)
-    dotRef.current.scale.setScalar(1 + Math.sin(raw * Math.PI * 18) * 0.14)
-    haloRef.current.scale.setScalar(1.2 + strength * 0.8)
+    /** Slight rhythmic pausefeel: bias motion toward segment midpoints */
+    const wobble = Math.sin(raw * Math.PI * 14) * 0.006
+    const position = placeOnPath(raw + wobble)
+
+    const segFloat = raw * (path.length - 1)
+    const segIdx = Math.min(path.length - 2, Math.floor(segFloat))
+    const lookahead = THREE.MathUtils.clamp(segIdx + 2, 0, path.length - 1)
+    const nextPoint = new THREE.Vector3(...path[lookahead]).lerp(position, 0.35)
+
+    markerRef.current.position.copy(position)
+    markerRef.current.lookAt(nextPoint)
+
+    const phase = state.clock.elapsedTime
+    const heartbeat = Math.sin(phase * 7.8) * 0.035
+    markerRef.current.scale.setScalar(
+      1 + strength * 0.16 + heartbeat + Math.sin(raw * Math.PI * 12) * 0.048,
+    )
+    markerRef.current.rotation.z = Math.sin(phase * 2.8) * 0.06
+
+    if (capsuleCoreRef.current) {
+      capsuleCoreRef.current.rotation.z = raw * Math.PI * 10 + phase * 0.8
+      capsuleCoreRef.current.rotation.y = Math.sin(phase * 3.2 + raw * 8) * 0.14
+    }
+    if (pulseRef.current) {
+      const pulse = 1.15 + ((raw * 4) % 1) * 1.85
+      pulseRef.current.scale.set(pulse, pulse, pulse)
+      const material = pulseRef.current.material as THREE.MeshBasicMaterial
+      material.opacity = 0.18 + 0.22 * (1 - ((raw * 4) % 1))
+    }
+    if (haloRef.current) {
+      const hscale = 1.35 + strength * 0.45 + Math.sin(raw * Math.PI * 8) * 0.08
+      haloRef.current.scale.setScalar(hscale)
+      const m = haloRef.current.material as THREE.MeshBasicMaterial
+      m.opacity = 0.12 + strength * 0.08 + 0.06 * Math.sin(phase * 5)
+    }
+
+    trailRefs.current.forEach((dot, index) => {
+      const age = (index + 1) / trailCount
+      const stagger = Math.sin((raw + age) * Math.PI * 6) * 0.014
+      dot.position.copy(placeOnPath(raw - age * 0.052 - stagger))
+      const mat = dot.material as THREE.MeshBasicMaterial
+      mat.color.set(profile.color)
+      mat.color.lerp(new THREE.Color('#ffffff'), age * 0.55)
+      mat.opacity = 0.45 - age * 0.38 + strength * 0.12
+      dot.scale.setScalar(0.88 - age * 0.55 + strength * 0.16 + Math.sin(phase * 8 + age * 10) * 0.045)
+    })
+
+    routeRefs.current.forEach((dot, index) => {
+      const offset = index / routeCount
+      dot.position.copy(placeOnPath(offset))
+      const cyclic = Math.min(Math.abs(raw - offset), Math.abs(raw - offset + 1), Math.abs(raw - offset - 1))
+      const swell = THREE.MathUtils.smootherstep(1 - cyclic * 8, 0, 1) * (0.28 + strength * 0.22)
+      dot.scale.setScalar(0.45 + swell + Math.sin((raw + offset) * Math.PI * 2) * 0.09)
+      const rm = dot.material as THREE.MeshBasicMaterial
+      rm.opacity = 0.18 + swell * 0.55 + 0.06 * strength
+    })
+
+    vesselRefs.current.forEach((dot, index) => {
+      const n = Math.max(1, vesselRefs.current.length)
+      const offset = index / n
+      const spiral = (index / n + raw * 0.22 + Math.sin(raw * Math.PI * 2) * 0.06) % 1
+      dot.position.copy(placeOnPath(spiral))
+      dot.scale.setScalar(0.42 + strength * 0.16 + Math.sin((raw + offset) * Math.PI * 10) * 0.05)
+      const vm = dot.material as THREE.MeshBasicMaterial
+      vm.opacity = 0.2 + strength * 0.12
+    })
+
+    const wpN = waypointRefs.current.length
+    waypointRefs.current.forEach((sphere, idx) => {
+      if (!sphere || !wpN) return
+      const pathIdx = Math.round((idx / Math.max(1, wpN - 1)) * (path.length - 1))
+      const [qx, qy, qz] = path[pathIdx]
+      sphere.position.set(qx, qy, qz)
+      const norm = pathIdx / Math.max(1, path.length - 1)
+      let dist = Math.abs(raw - norm)
+      dist = Math.min(dist, Math.abs(dist - 1))
+      const near = dist < 0.072
+      const sc = near ? 1.35 + strength * 0.4 : 0.92 + strength * 0.2
+      sphere.scale.setScalar(sc + Math.sin(phase * 4 + idx) * 0.06)
+      const wm = sphere.material as THREE.MeshBasicMaterial
+      wm.opacity = near ? 0.55 + strength * 0.15 : 0.18 + strength * 0.08
+    })
   })
 
   if (!profile) return null
 
+  const path = profile.path
+  const waypointCount = Math.min(8, path.length)
+
   return (
     <group>
-      <Line points={profile.path.map((point) => new THREE.Vector3(...point))} color={profile.color} lineWidth={4} transparent opacity={0.78} />
-      <mesh ref={haloRef}>
-        <sphereGeometry args={[42, 28, 28]} />
-        <meshBasicMaterial color={profile.color} transparent opacity={0.14 + strength * 0.08} />
-      </mesh>
-      <mesh ref={dotRef}>
-        <sphereGeometry args={[24, 28, 28]} />
-        <meshBasicMaterial color={profile.color} transparent opacity={0.96} />
-      </mesh>
+      {Array.from({ length: routeCount }).map((_, index) => (
+        <mesh
+          key={`route-${index}`}
+          position={sampleMedicinePath(path, index / routeCount)}
+          ref={(node) => {
+            if (node) routeRefs.current[index] = node
+          }}
+        >
+          <sphereGeometry args={[3.2, 10, 10]} />
+          <meshBasicMaterial color={profile.color} transparent opacity={0.26} depthWrite={false} depthTest={false} />
+        </mesh>
+      ))}
+      {Array.from({ length: waypointCount }).map((_, index) => {
+        const pathIdx = Math.round((index / Math.max(1, waypointCount - 1)) * (path.length - 1))
+        const [wx, wy, wz] = path[pathIdx]
+        return (
+        <mesh
+          key={`wp-${index}`}
+          position={[wx, wy, wz]}
+          ref={(node) => {
+            if (node) waypointRefs.current[index] = node
+          }}
+        >
+          <sphereGeometry args={[5.5, 12, 12]} />
+          <meshBasicMaterial color={profile.color} transparent opacity={0.22} depthWrite={false} depthTest={false} blending={THREE.AdditiveBlending} />
+        </mesh>
+        )
+      })}
+      <group ref={markerRef} renderOrder={35}>
+        <mesh ref={haloRef}>
+          <sphereGeometry args={[32, 20, 20]} />
+          <meshBasicMaterial color={profile.color} transparent opacity={0.14} depthWrite={false} depthTest={false} blending={THREE.AdditiveBlending} />
+        </mesh>
+        <mesh ref={pulseRef} rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[22, 2, 12, 48]} />
+          <meshBasicMaterial color="#ffffff" transparent opacity={0.28} depthWrite={false} depthTest={false} blending={THREE.AdditiveBlending} />
+        </mesh>
+        <group ref={capsuleCoreRef} rotation={[0, 0, Math.PI / 2]}>
+          <mesh position={[-13, 0, 0]}>
+            <capsuleGeometry args={[10, 24, 8, 20]} />
+            <meshStandardMaterial color="#ffffff" emissive="#ffffff" emissiveIntensity={0.28} roughness={0.12} transparent opacity={0.97} depthWrite={false} depthTest={false} />
+          </mesh>
+          <mesh position={[13, 0, 0]}>
+            <capsuleGeometry args={[10, 24, 8, 20]} />
+            <meshStandardMaterial color={profile.color} emissive={profile.color} emissiveIntensity={0.72 + strength * 0.2} roughness={0.16} transparent opacity={0.94} depthWrite={false} depthTest={false} />
+          </mesh>
+        </group>
+        <Html center className="medicine-capsule-icon" distanceFactor={6} zIndexRange={[45, 0]}>
+          <img src="/effects/healthicons/pill-1.svg" alt="" className="medicine-capsule-icon-img" />
+        </Html>
+      </group>
+      {Array.from({ length: trailCount }).map((_, index) => (
+        <mesh
+          key={index}
+          ref={(node) => {
+            if (node) trailRefs.current[index] = node
+          }}
+        >
+          <sphereGeometry args={[7, 12, 12]} />
+          <meshBasicMaterial color={profile.color} transparent opacity={0.4} depthWrite={false} depthTest={false} blending={THREE.AdditiveBlending} />
+        </mesh>
+      ))}
+      {profile.target.includes('vessels')
+        ? Array.from({ length: 12 }).map((_, index) => (
+            <mesh
+              key={`micro-${index}`}
+              ref={(node) => {
+                if (node) vesselRefs.current[index] = node
+              }}
+            >
+              <sphereGeometry args={[5, 10, 10]} />
+              <meshBasicMaterial color={profile.color} transparent opacity={0.32} depthWrite={false} depthTest={false} blending={THREE.AdditiveBlending} />
+            </mesh>
+          ))
+        : Array.from({ length: 6 }).map((_, index) => (
+            <mesh
+              key={`micro-${index}`}
+              ref={(node) => {
+                if (node) vesselRefs.current[index] = node
+              }}
+            >
+              <sphereGeometry args={[4, 8, 8]} />
+              <meshBasicMaterial color={profile.color} transparent opacity={0.26} depthWrite={false} depthTest={false} />
+            </mesh>
+          ))}
     </group>
   )
 }
 
-function OrganHalo({ group, profile, timeLabel }: { group: Exclude<OrganGroup, 'skin'>; profile?: MedicineProfile; timeLabel: string }) {
-  const meshRef = useRef<THREE.Mesh>(null)
+function sideEffectCopy(group: OrganGroup, medicine?: MedicineProfile) {
+  const route = medicine?.route === 'inhaled' ? 'Airway contact' : medicine?.route === 'injection' ? 'Blood route' : 'Exposure'
+  const copy: Partial<Record<OrganGroup, string>> = {
+    brain: 'CNS effects',
+    heart: 'Cardiac load',
+    respiratory: 'Airway irritation',
+    lungs: 'Breathing change',
+    esophagus: 'Swallow irritation',
+    liver: 'Metabolism',
+    stomach: 'Gut lining',
+    pancreas: 'Glucose shifts',
+    kidneys: 'Clearance strain',
+    intestine: 'Gut motility',
+    largeIntestine: 'Colon / flora',
+    bladder: 'Urine clearance',
+    vessels: 'BP / vessels',
+    skin: 'Rash allergy',
+    adrenal: 'Stress axis',
+  }
+
+  return copy[group] ?? route
+}
+
+function sideEffectIcon(group: OrganGroup, riskLevel = 0) {
+  if (riskLevel > 0.88) return '/effects/healthicons/burn.svg'
+  const icons: Partial<Record<OrganGroup, string>> = {
+    brain: '/effects/healthicons/neurology.svg',
+    heart: '/effects/healthicons/heart-organ.svg',
+    respiratory: '/effects/healthicons/lungs.svg',
+    lungs: '/effects/healthicons/lungs.svg',
+    esophagus: '/effects/healthicons/stomach.svg',
+    liver: '/effects/healthicons/liver.svg',
+    stomach: '/effects/healthicons/stomach.svg',
+    pancreas: '/effects/healthicons/pancreas.svg',
+    kidneys: '/effects/healthicons/kidneys.svg',
+    intestine: '/effects/healthicons/intestine.svg',
+    largeIntestine: '/effects/healthicons/colon.svg',
+    bladder: '/effects/healthicons/bladder.svg',
+    vessels: '/effects/healthicons/blood-vessel.svg',
+    skin: '/effects/healthicons/allergies.svg',
+    adrenal: '/effects/healthicons/nerve.svg',
+  }
+
+  return icons[group] ?? '/effects/healthicons/medicines.svg'
+}
+
+function sideEffectHint(group: OrganGroup, riskLevel: number): string {
+  const detail: Partial<Record<OrganGroup, string>> = {
+    brain: riskLevel > 0.56 ? 'Dizziness or mood swings' : 'Watch dose & glucose.',
+    heart: riskLevel > 0.56 ? 'HR / BP swings' : 'Monitor pulse & fluids.',
+    respiratory: riskLevel > 0.56 ? 'Bronchospasm risk' : 'Mild airway irritation.',
+    lungs: riskLevel > 0.56 ? 'Wheeze / short breath' : 'Breathing discomfort.',
+    esophagus: 'Throat irritation (tablets)',
+    liver: riskLevel > 0.56 ? 'Enzymes / toxin load' : 'Metabolism watchpoint.',
+    stomach: riskLevel > 0.56 ? 'Nausea or bleeding alert' : 'Nausea or burning.',
+    pancreas: 'Glucose can shift',
+    kidneys: riskLevel > 0.56 ? 'Clearance impaired' : 'Hydration & labs.',
+    intestine: riskLevel > 0.56 ? 'Diarrhea / absorption' : 'Gut distress.',
+    largeIntestine: 'Bowel habit change',
+    bladder: riskLevel > 0.56 ? 'Output dropping' : 'Urine signals.',
+    vessels: riskLevel > 0.56 ? 'BP spikes / clot risk' : 'Pressure & swelling.',
+    adrenal: riskLevel > 0.56 ? 'Axis suppression' : 'Hormone watch.',
+  }
+
+  return detail[group] ?? 'Monitor exposure if symptoms worsen.'
+}
+
+function severityMeta(riskLevel: number): { slug: string; label: string } {
+  if (riskLevel > 0.78) return { slug: 'severity-high', label: 'High' }
+  if (riskLevel > 0.56) return { slug: 'severity-mod', label: 'Mod' }
+  return { slug: 'severity-watch', label: 'Watch' }
+}
+
+function EffectCallout({ group, profile, riskLevel }: { group: Exclude<OrganGroup, 'skin'>; profile?: MedicineProfile; riskLevel: number }) {
+  const arrowRef = useRef<THREE.Group>(null)
+  const impactRef = useRef<THREE.Mesh>(null)
+  const tracerRef = useRef<THREE.Mesh>(null)
   const target = profile?.target.includes(group)
-  const strength = timelineEffect[timeLabel] ?? 0.2
+  const base = organPosition[group]
+  const side = base[0] >= 0 ? 1 : -1
+  const end = useMemo<[number, number, number]>(() => {
+    const offset = effectCalloutOffset[group] ?? [side * 230, -24, 70]
+    return [base[0] + offset[0], base[1] + offset[1], base[2] + offset[2]]
+  }, [base, group, side])
+  const color = riskLevel > 0.78 ? '#ff3d2e' : riskLevel > 0.56 ? '#ff9f1c' : '#f8a866'
+  const baseVector = useMemo(() => new THREE.Vector3(...base), [base])
+  const endVector = useMemo(() => new THREE.Vector3(...end), [end])
+  const tier = useMemo(() => severityMeta(riskLevel), [riskLevel])
 
   useFrame(({ clock }) => {
-    if (!meshRef.current || !target) return
-    meshRef.current.scale.setScalar(0.8 + strength * 0.75 + Math.max(0, Math.sin(clock.getElapsedTime() * 2.7)) * 0.15)
-    meshRef.current.rotation.y = clock.getElapsedTime() * 0.28
+    if (!arrowRef.current || !target) return
+    const phase = clock.getElapsedTime()
+    arrowRef.current.position.y = Math.sin(phase * 1.15) * 3
+    if (impactRef.current) {
+      impactRef.current.scale.setScalar(1 + Math.sin(phase * 2.2) * 0.08 + riskLevel * 0.22)
+    }
+    if (tracerRef.current) {
+      const t = (phase * 0.42 + riskLevel * 0.27) % 1
+      tracerRef.current.position.copy(endVector.clone().lerp(baseVector, t))
+      tracerRef.current.scale.setScalar(0.8 + Math.sin(phase * 7) * 0.12)
+    }
   })
 
   if (!profile || !target) return null
 
   return (
-    <mesh ref={meshRef} position={organPosition[group]}>
-      <sphereGeometry args={[125, 32, 22]} />
-      <meshBasicMaterial color={profile.color} transparent opacity={0.12 + strength * 0.07} wireframe />
-    </mesh>
-  )
-}
-
-function AnatomyLabels({ visibleGroups }: { visibleGroups: Set<OrganGroup> }) {
-  return (
-    <group>
-      {labelPoints
-        .filter((item) => visibleGroups.has(item.group))
-        .map((item) => (
-          <Html key={item.group} position={item.position} center className="anatomy-organ-label" distanceFactor={760}>
-            {item.label}
-          </Html>
-        ))}
+    <group ref={arrowRef}>
+      {Array.from({ length: 10 }).map((_, index) => (
+        <mesh key={`arrow-dot-${index}`} position={new THREE.Vector3().lerpVectors(endVector, baseVector, index / 9)}>
+          <sphereGeometry args={[3.5, 10, 10]} />
+          <meshBasicMaterial color={color} transparent opacity={0.22 + index * 0.05} depthWrite={false} depthTest={false} />
+        </mesh>
+      ))}
+      <mesh ref={tracerRef}>
+        <sphereGeometry args={[8, 14, 14]} />
+        <meshBasicMaterial color="#ffffff" transparent opacity={0.78} depthWrite={false} depthTest={false} />
+      </mesh>
+      <mesh ref={impactRef} position={base}>
+        <octahedronGeometry args={[18 + riskLevel * 14, 0]} />
+        <meshBasicMaterial color={color} transparent opacity={0.42} depthWrite={false} depthTest={false} />
+      </mesh>
+      <mesh position={base} rotation={[Math.PI / 2, 0, 0]}>
+        <coneGeometry args={[10, 28, 16]} />
+        <meshBasicMaterial color={color} transparent opacity={0.88} depthWrite={false} depthTest={false} />
+      </mesh>
+      <Html position={end} center distanceFactor={5.2} zIndexRange={[50, 0]} className="anatomy-effect-html-wrap">
+        <div className={`anatomy-effect-chip ${riskLevel > 0.78 ? 'anatomy-effect-chip-high' : riskLevel > 0.56 ? 'anatomy-effect-chip-med' : 'anatomy-effect-chip-low'}`}>
+          <img src={sideEffectIcon(group, riskLevel)} alt="" className="anatomy-effect-chip-icon" />
+          <div className="anatomy-effect-chip-main">
+            <div className="anatomy-effect-chip-top">
+              <span className="anatomy-effect-chip-organ">{group.replace(/([A-Z])/g, ' $1').trim()}</span>
+              <span className={`anatomy-effect-chip-sev ${tier.slug}`}>{tier.label}</span>
+              <span className="anatomy-effect-chip-pct">{Math.round(riskLevel * 100)}%</span>
+            </div>
+            <div className="anatomy-effect-chip-route">{sideEffectCopy(group, profile)}</div>
+            <div className="anatomy-effect-chip-hint">{sideEffectHint(group, riskLevel)}</div>
+            <div className="anatomy-effect-chip-meter" aria-hidden>
+              <i style={{ width: `${Math.round(riskLevel * 100)}%`, backgroundColor: color }} />
+            </div>
+          </div>
+        </div>
+      </Html>
     </group>
   )
 }
@@ -538,18 +771,34 @@ function AnatomyRoot({
   speed,
   highlightedOrgans,
   focusMode,
-  showLabels,
   skinOpacity,
+  showSkeleton,
+  heartRate,
+  breathingRate,
 }: OpenAnatomyStageProps & {
   isPlaying: boolean
   speed: number
   focusMode: 'overview' | 'pathway' | 'sideEffects'
-  showLabels: boolean
   skinOpacity: number
+  showSkeleton: boolean
+  heartRate: number
+  breathingRate: number
 }) {
   const rootRef = useRef<THREE.Group>(null)
   const medicineProfile = medicineProfiles[medicine]
   const intensity = timelineEffect[timeLabel] ?? 0.2
+  const sideEffectMode = focusMode === 'sideEffects'
+  const overviewMode = focusMode === 'overview'
+  const visibleAssets = useMemo(
+    () =>
+      ANATOMY_ASSETS.filter((item) => {
+        if (!shouldRenderAsset(item, profile)) return false
+        if (!showSkeleton && item.group === 'skeleton') return false
+        if (skinOpacity <= 0 && item.group === 'skin') return false
+        return true
+      }),
+    [profile, showSkeleton, skinOpacity],
+  )
 
   const highlightedGroups = useMemo(() => {
     const groups = new Set<OrganGroup>(medicineProfile?.target ?? [])
@@ -568,29 +817,42 @@ function AnatomyRoot({
     return groups
   }, [highlightedOrgans, medicineProfile, profile.diseases, profile.organConditions])
 
-  const labelGroups = useMemo(() => {
-    if (focusMode === 'overview' && highlightedGroups.size === 0) return new Set<OrganGroup>(['brain', 'heart', 'respiratory', 'liver', 'stomach', 'kidneys', 'intestine'])
-    return highlightedGroups
-  }, [focusMode, highlightedGroups])
+  const organsForSideEffectLabels = useMemo(() => {
+    const order: Exclude<OrganGroup, 'skin'>[] = [
+      'brain',
+      'heart',
+      'respiratory',
+      'lungs',
+      'esophagus',
+      'liver',
+      'stomach',
+      'pancreas',
+      'kidneys',
+      'intestine',
+      'largeIntestine',
+      'bladder',
+      'vessels',
+      'adrenal',
+    ]
+    const targets = medicineProfile?.target ?? []
+    return order.filter((g) => targets.includes(g))
+  }, [medicineProfile])
 
   useFrame(({ clock }) => {
     if (!rootRef.current) return
-    const childScale = profile.age < 18 ? 0.76 : 1
-    const sexScaleX = profile.gender === 'Female' ? 0.94 : profile.gender === 'Male' ? 1.04 : 1
-    const bodyTypeScale = profile.bodyType === 'Athletic' ? 1.04 : profile.bodyType === 'Lean' ? 0.95 : profile.bodyType === 'Heavy' ? 1.13 : profile.bodyType === 'Soft' ? 1.07 : 1
-    const fatigueLean = 1 - signals.fatigue * 0.035
-
-    rootRef.current.scale.set(sexScaleX * bodyTypeScale * childScale, fatigueLean * childScale, bodyTypeScale * childScale)
-    rootRef.current.rotation.z = Math.sin(clock.getElapsedTime() * 0.4) * 0.012 + signals.fatigue * 0.01
+    const [x, y, z] = categoryScale(profile, signals)
+    rootRef.current.scale.set(x, y, z)
+    rootRef.current.rotation.z = Math.sin(clock.getElapsedTime() * 0.32) * 0.009 + signals.fatigue * 0.008 + (profile.age >= 65 ? 0.012 : 0)
   })
 
   return (
     <group ref={rootRef} position={[0, -0.03, 0]}>
       <group rotation={[-Math.PI / 2, 0, 0]} scale={ANATOMY_SCALE} position={[0, 0.02, 0]}>
         <group position={ANATOMY_OFFSET}>
-          {realAnatomyAssets.map((asset) => {
+          {visibleAssets.map((asset) => {
             const targeted = highlightedGroups.has(asset.group)
-            const dimmed = focusMode !== 'overview' && !targeted && asset.group !== 'skin' && asset.group !== 'skeleton'
+            const dimmed = !targeted && asset.group !== 'skin' && asset.group !== 'skeleton'
+            const riskLevel = sideEffectRisk(asset.group, intensity, profile, signals, medicineProfile)
 
             return (
               <RealAnatomyMesh
@@ -598,40 +860,24 @@ function AnatomyRoot({
                 asset={asset}
                 targeted={targeted}
                 dimmed={dimmed}
-                medicineColor={medicineProfile?.color ?? '#38bdf8'}
+                overviewMode={overviewMode}
+                medicineColor={medicineProfile?.color ?? '#ffa366'}
                 intensity={intensity}
+                sideEffectMode={sideEffectMode}
+                riskLevel={riskLevel}
                 skinOpacity={asset.group === 'skin' ? skinOpacity : asset.opacity ?? groupStyle[asset.group].opacity}
                 isPlaying={isPlaying}
+                heartRate={heartRate}
+                breathingRate={breathingRate}
               />
             )
           })}
           <MedicineFlow profile={medicineProfile} timeLabel={timeLabel} isPlaying={isPlaying} speed={speed} />
-          {(
-            [
-              'brain',
-              'heart',
-              'respiratory',
-              'lungs',
-              'liver',
-              'gallbladder',
-              'stomach',
-              'pancreas',
-              'spleen',
-              'kidneys',
-              'intestine',
-              'largeIntestine',
-              'appendix',
-              'bladder',
-              'vessels',
-              'skeleton',
-              'spinalCord',
-              'diaphragm',
-              'adrenal',
-            ] as const
-          ).map((group) => (
-            <OrganHalo key={group} group={group} profile={medicineProfile} timeLabel={timeLabel} />
-          ))}
-          {showLabels && <AnatomyLabels visibleGroups={labelGroups} />}
+          {sideEffectMode
+            ? organsForSideEffectLabels.map((group) => (
+                <EffectCallout key={group} group={group} profile={medicineProfile} riskLevel={sideEffectRisk(group, intensity, profile, signals, medicineProfile)} />
+              ))
+            : null}
         </group>
       </group>
     </group>
@@ -649,26 +895,61 @@ export default function OpenAnatomyStage({
   highlightedOrgans = [],
   focusMode = 'overview',
 }: OpenAnatomyStageProps) {
-  const [showLabels, setShowLabels] = useState(false)
-  const [skinOpacity, setSkinOpacity] = useState(0.045)
   const med = medicineProfiles[medicine]
   const effectiveFocusMode = medicine && step === 'simulation' ? focusMode : 'overview'
+  const [showSkin, setShowSkin] = useState(true)
+  const [showSkeleton, setShowSkeleton] = useState(true)
+  const [animationPlaying, setAnimationPlaying] = useState(isPlaying)
+  const [animationSpeed, setAnimationSpeed] = useState(speed)
+  const [scenarioMode, setScenarioMode] = useState<keyof typeof animationScenarios>('restingState')
+  const [showParticles, setShowParticles] = useState(true)
+  const [sideEffectIntensity, setSideEffectIntensity] = useState(signals.diseaseLoad ?? 0)
+  const [heartRate, setHeartRate] = useState(72)
+  const [breathingRate, setBreathingRate] = useState(14)
+
+  const skinOpacity = useMemo(() => {
+    if (!showSkin) return 0
+    if (effectiveFocusMode === 'sideEffects') return 0.44
+    if (effectiveFocusMode === 'overview') return 0.78
+    return 0.64
+  }, [showSkin, effectiveFocusMode])
+
+  const visibleStructureCount = useMemo(
+    () =>
+      ANATOMY_ASSETS.filter((item) => {
+        if (!shouldRenderAsset(item, profile)) return false
+        if (!showSkeleton && item.group === 'skeleton') return false
+        if (skinOpacity <= 0 && item.group === 'skin') return false
+        return true
+      }).length,
+    [profile, showSkeleton, skinOpacity],
+  )
+
+  useEffect(() => {
+    setAnimationPlaying(isPlaying)
+    setAnimationSpeed(speed)
+  }, [isPlaying, speed])
+
+  useEffect(() => {
+    const scenario = animationScenarios[scenarioMode]
+    setHeartRate(scenario.heart.bpm || 72)
+    setBreathingRate(scenario.lungs.ratePerMin || 14)
+  }, [scenarioMode])
 
   return (
-    <div className="open-anatomy-stage">
+    <div className="anatomy-stage-clean">
       <Canvas
         camera={{ position: [0, 0.08, 4.55], fov: 36 }}
         dpr={[1, 1.55]}
-        shadows
         style={{ position: 'absolute', inset: 0, height: '100%', width: '100%' }}
-        gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
+        gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
       >
-        <color attach="background" args={['#07111c']} />
-        <fog attach="fog" args={['#0b1725', 5.4, 9.2]} />
-        <ambientLight intensity={1.08} color="#dcecff" />
-        <directionalLight castShadow position={[-2.4, 5.4, 4.2]} intensity={3.3} color="#fff4de" />
-        <pointLight position={[2.5, 1.8, 2.8]} intensity={2.7} color="#8cf8e4" />
-        <pointLight position={[-2.6, 2.5, -2.6]} intensity={2.2} color="#f8c06a" />
+        <color attach="background" args={['#0a0a0a']} />
+        <ambientLight intensity={1.35} color="#f5f5f5" />
+        <directionalLight position={[-2.4, 5.4, 4.2]} intensity={3.5} color="#ffffff" />
+        <pointLight position={[2.5, 1.8, 2.8]} intensity={3} color="#f8e5d2" />
+        <pointLight position={[-2.6, 2.5, -2.6]} intensity={1.25} color="#f8c06a" />
+        <hemisphereLight intensity={0.45} color="#fff8f0" groundColor="#1a1010" />
         <Suspense fallback={<LoadingAnatomy />}>
           <AnatomyRoot
             profile={profile}
@@ -676,18 +957,54 @@ export default function OpenAnatomyStage({
             step={step}
             medicine={medicine}
             timeLabel={timeLabel}
-            isPlaying={isPlaying}
-            speed={speed}
+            isPlaying={animationPlaying}
+            speed={animationSpeed}
             highlightedOrgans={highlightedOrgans}
             focusMode={effectiveFocusMode}
-            showLabels={showLabels}
             skinOpacity={skinOpacity}
+            showSkeleton={showSkeleton}
+            heartRate={heartRate}
+            breathingRate={breathingRate}
           />
-          <ContactShadows position={[0, -1.66, 0]} opacity={0.42} scale={5.2} blur={2.8} far={3.2} />
         </Suspense>
         <OrbitControls enablePan={false} target={[0, 0.02, 0]} minDistance={2.8} maxDistance={6.8} enableDamping dampingFactor={0.06} />
       </Canvas>
       <AnatomyProgress />
+      <div className="anatomy-minimal-hud">
+        <span>{bodyCategory(profile)}</span>
+        <span>{profile.age} years</span>
+        <span>{profile.bodyType}</span>
+        <span>BMI {signals.bmi}</span>
+        <span>{timeLabel}</span>
+        <span>{visibleStructureCount} structures</span>
+      </div>
+      {/* Animation Control Window */}
+      <AnimationControlWindow
+        isPlaying={animationPlaying}
+        onPlayPause={setAnimationPlaying}
+        scenarioMode={scenarioMode}
+        onScenarioChange={(scenario) => setScenarioMode(scenario as keyof typeof animationScenarios)}
+        animationSpeed={animationSpeed}
+        onSpeedChange={setAnimationSpeed}
+        heartRate={heartRate}
+        breathingRate={breathingRate}
+        showParticles={showParticles}
+        onToggleParticles={setShowParticles}
+        showSkin={showSkin}
+        onToggleSkin={setShowSkin}
+        showSkeleton={showSkeleton}
+        onToggleSkeleton={setShowSkeleton}
+        currentMedicine={medicine}
+        sideEffectIntensity={sideEffectIntensity}
+        onSideEffectChange={setSideEffectIntensity}
+      />
+
+      {medicine && (
+        <div className="anatomy-medicine-overlay">
+          <span>{focusMode === 'sideEffects' ? 'Side-effect burden' : med?.route ?? 'Medicine pathway'}</span>
+          <strong>{medicine}: {med?.copy ?? 'condition-based educational simulation'}</strong>
+        </div>
+      )}
     </div>
   )
 }

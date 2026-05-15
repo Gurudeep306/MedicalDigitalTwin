@@ -75,7 +75,7 @@ type Medicine = {
   safety: string
 }
 
-const timeline = ['1 day', '1 week', '1 month', '6 months', '1 year', '5 years']
+const timeline = ['1 day', '1 week', '1 month', '6 months', '1 year', '5 years', '10 years']
 
 const initialProfile: Profile = {
   age: 34,
@@ -500,7 +500,11 @@ export default function Home() {
     [profile.organConditions, selectedCondition.organs, selectedMedicine.affectedOrgans],
   )
   const timelineLabel = timeline[timeIndex]
-  const longTermCopy = selectedMedicine.longTerm[timelineLabel] ?? selectedMedicine.longTerm['1 day']
+  const longTermCopy =
+    selectedMedicine.longTerm[timelineLabel]
+    ?? (timelineLabel === '10 years'
+      ? `A 10-year view emphasizes accumulated monitoring needs: ${selectedMedicine.longTerm['5 years'] ?? selectedMedicine.safety}`
+      : selectedMedicine.longTerm['1 day'])
 
   const handleAuth = (event: FormEvent) => {
     event.preventDefault()
@@ -831,7 +835,11 @@ export default function Home() {
                   </div>
                   <input type="range" min={0} max={timeline.length - 1} value={timeIndex} onChange={(event) => setTimeIndex(Number(event.target.value))} className="cinematic-range" />
                   <div className="timeline-labels">
-                    {timeline.map((item) => <span key={item}>{item}</span>)}
+                    {timeline.map((item, index) => (
+                      <button key={item} type="button" className={timeIndex === index ? 'timeline-label-active' : ''} onClick={() => setTimeIndex(index)}>
+                        {item}
+                      </button>
+                    ))}
                   </div>
                 </div>
 

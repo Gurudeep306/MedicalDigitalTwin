@@ -9,12 +9,12 @@ module.exports = {
     extend: {
       colors: {
         medical: {
-          50: '#f0f9ff',
-          100: '#e0f2fe',
-          200: '#bae6fd',
-          500: '#0ea5e9',
-          600: '#0284c7',
-          900: '#0c2d6b',
+          50: '#fff5e6',
+          100: '#ffe8cc',
+          200: '#ffd699',
+          500: '#ff9933',
+          600: '#ff8800',
+          900: '#cc6600',
         },
       },
       animation: {
