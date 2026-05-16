@@ -5,21 +5,31 @@ import {
   Activity,
   AlertTriangle,
   ArrowRight,
+  BadgeInfo,
+  BookOpen,
   Brain,
   CheckCircle2,
   Clock3,
   Gauge,
+  Globe2,
   HeartPulse,
+  Layers,
+  LoaderCircle,
   LogIn,
+  Microscope,
   Pause,
   Pill,
   Play,
   RotateCcw,
+  Route,
+  Search,
   ShieldCheck,
   Sparkles,
   Stethoscope,
+  User,
   UserPlus,
   Wind,
+  Zap,
 } from 'lucide-react'
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import OpenAnatomyStage from '@/components/OpenAnatomyStage'
@@ -73,6 +83,43 @@ type Medicine = {
   seriousSignals: string[]
   longTerm: Record<string, string>
   safety: string
+}
+
+type LookupStatus = 'idle' | 'loading' | 'success' | 'error'
+
+type OpenFdaLabel = {
+  openfda?: {
+    brand_name?: string[]
+    generic_name?: string[]
+    route?: string[]
+  }
+  adverse_reactions?: string[]
+  boxed_warning?: string[]
+  contraindications?: string[]
+  description?: string[]
+  dosage_and_administration?: string[]
+  indications_and_usage?: string[]
+  patient_medication_information?: string[]
+  precautions?: string[]
+  warnings?: string[]
+  warnings_and_cautions?: string[]
+}
+
+type OpenFdaResponse = {
+  results?: OpenFdaLabel[]
+}
+
+type RxNavApproximateResponse = {
+  approximateGroup?: {
+    candidate?: Array<{ name?: string }>
+  }
+}
+
+type SearchSuggestion = {
+  id: string
+  title: string
+  subtitle: string
+  source: string
 }
 
 const timeline = ['1 day', '1 week', '1 month', '6 months', '1 year', '5 years', '10 years']
@@ -407,10 +454,75 @@ function unique<T>(items: T[]) {
   return Array.from(new Set(items))
 }
 
-function getMedicine(name: string, condition?: Condition): Medicine {
-  const known = medicineCatalog.find((item) => item.name === name)
-  if (known) return known
+const organKeywordMap: Array<[string[], string]> = [
+  [['brain', 'seizure', 'confusion', 'dizzy', 'headache', 'mood', 'vision'], 'Brain'],
+  [['heart', 'cardiac', 'chest pain', 'palpitation', 'qt ', 'arrhythmia'], 'Heart'],
+  [['lung', 'breath', 'bronch', 'respiratory', 'cough', 'wheez'], 'Lungs'],
+  [['liver', 'hepatic', 'jaundice', 'yellow skin', 'transaminase'], 'Liver'],
+  [['kidney', 'renal', 'urine', 'creatinine'], 'Kidneys'],
+  [['stomach', 'gastric', 'nausea', 'vomiting', 'abdominal', 'ulcer'], 'Stomach'],
+  [['intestin', 'diarrhea', 'constipation', 'bowel', 'colitis'], 'Intestine'],
+  [['pancreas', 'pancreatitis', 'glucose', 'diabetes', 'hypoglycemia'], 'Pancreas'],
+  [['skin', 'rash', 'hives', 'itch', 'angioedema', 'allergic'], 'Skin'],
+  [['blood', 'pressure', 'bleeding', 'clot', 'vascular', 'vessel'], 'Vessels'],
+  [['eye', 'ocular', 'retina'], 'Eyes'],
+  [['bladder', 'urinary'], 'Bladder'],
+]
 
+function splitMedicalText(sections: Array<string | undefined>, fallback: string, maxItems = 4) {
+  const text = sections.filter(Boolean).join(' ').replace(/\s+/g, ' ').trim()
+  if (!text) return [fallback]
+
+  return unique(
+    text
+      .split(/(?<=[.!?])\s+|;\s+|\n+/)
+      .map((item) => item.replace(/^[-•*\d.)\s]+/, '').trim())
+      .filter((item) => item.length > 12 && item.length < 180)
+      .slice(0, maxItems),
+  )
+}
+
+function inferOrgansFromLabel(label: OpenFdaLabel, condition?: Condition) {
+  const source = [
+    ...(label.adverse_reactions ?? []),
+    ...(label.warnings ?? []),
+    ...(label.warnings_and_cautions ?? []),
+    ...(label.precautions ?? []),
+    ...(label.indications_and_usage ?? []),
+    ...(label.patient_medication_information ?? []),
+  ].join(' ').toLowerCase()
+
+  const organs = organKeywordMap.flatMap(([keywords, organ]) => (keywords.some((keyword) => source.includes(keyword)) ? [organ] : []))
+  return unique([...(condition?.organs ?? []), ...organs, 'Liver', 'Kidneys', 'Vessels']).slice(0, 9)
+}
+
+function inferRouteFromLabel(label: OpenFdaLabel): Medicine['route'] {
+  const routeText = [...(label.openfda?.route ?? []), ...(label.dosage_and_administration ?? [])].join(' ').toLowerCase()
+  if (routeText.includes('inhal')) return 'Inhaled dose'
+  if (routeText.includes('injection') || routeText.includes('intravenous') || routeText.includes('subcutaneous') || routeText.includes('intramuscular')) return 'Injection'
+  return 'Oral tablet'
+}
+
+function buildUniversalCondition(rawName: string): Condition {
+  const name = rawName.trim() || 'Any condition'
+  const lower = name.toLowerCase()
+  const organs = unique(
+    organKeywordMap.flatMap(([keywords, organ]) => (keywords.some((keyword) => lower.includes(keyword)) ? [organ] : [])),
+  )
+
+  return {
+    id: 'custom',
+    name,
+    category: 'Universal',
+    description: `Custom disease/condition profile for ${name}.`,
+    organs: organs.length ? organs : ['Brain', 'Heart', 'Liver', 'Kidneys', 'Lungs', 'Stomach', 'Vessels'],
+    symptoms: ['Patient-specific symptoms'],
+    recommended: [],
+    icon: Globe2,
+  }
+}
+
+function buildFallbackMedicine(name: string, condition?: Condition): Medicine {
   return {
     name: name || 'Custom medicine',
     conditionIds: condition ? [condition.id] : [],
@@ -427,6 +539,162 @@ function getMedicine(name: string, condition?: Condition): Medicine {
   }
 }
 
+async function getRxNormSearchTerms(name: string) {
+  try {
+    const response = await fetch(`https://rxnav.nlm.nih.gov/REST/approximateTerm.json?term=${encodeURIComponent(name.trim())}&maxEntries=3`)
+    if (!response.ok) return [name]
+    const json = (await response.json()) as RxNavApproximateResponse
+    const candidates = json.approximateGroup?.candidate?.map((item) => item.name).filter((item): item is string => Boolean(item)) ?? []
+    return unique([name, ...candidates])
+  } catch {
+    return [name]
+  }
+}
+
+async function searchDiseaseSuggestions(query: string, signal?: AbortSignal): Promise<SearchSuggestion[]> {
+  const clean = query.trim()
+  if (clean.length < 2) return []
+
+  const local = conditionCatalog
+    .filter((item) => `${item.name} ${item.category} ${item.description}`.toLowerCase().includes(clean.toLowerCase()))
+    .map((item) => ({
+      id: `local-condition-${item.id}`,
+      title: item.name,
+      subtitle: item.description,
+      source: 'Curated',
+    }))
+
+  try {
+    const response = await fetch(`https://clinicaltables.nlm.nih.gov/api/conditions/v3/search?terms=${encodeURIComponent(clean)}&maxList=8`, { signal })
+    if (!response.ok) return local.slice(0, 8)
+    const json = await response.json() as unknown[]
+    const rows = Array.isArray(json[3]) ? json[3] as unknown[] : []
+    const remote = rows
+      .map((row, index) => {
+        const values = Array.isArray(row) ? row : [row]
+        const title = String(values.find((value) => typeof value === 'string' && value.trim()) ?? '').trim()
+        if (!title) return null
+        return {
+          id: `clinical-condition-${index}-${title}`,
+          title,
+          subtitle: 'Condition suggestion from medical terminology search',
+          source: 'ClinicalTables',
+        }
+      })
+      .filter((item): item is SearchSuggestion => Boolean(item))
+
+    return unique([...local, ...remote].map((item) => item.title)).map((title) => [...local, ...remote].find((item) => item.title === title)!).slice(0, 8)
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') return []
+    return local.slice(0, 8)
+  }
+}
+
+async function searchMedicineSuggestions(query: string, signal?: AbortSignal): Promise<SearchSuggestion[]> {
+  const clean = query.trim()
+  if (clean.length < 2) return []
+
+  const local = medicineCatalog
+    .filter((item) => `${item.name} ${item.purpose}`.toLowerCase().includes(clean.toLowerCase()))
+    .map((item) => ({
+      id: `local-medicine-${item.name}`,
+      title: item.name,
+      subtitle: `${item.route} · ${item.purpose}`,
+      source: 'Curated',
+    }))
+
+  try {
+    const response = await fetch(`https://rxnav.nlm.nih.gov/REST/approximateTerm.json?term=${encodeURIComponent(clean)}&maxEntries=10`, { signal })
+    if (!response.ok) return local.slice(0, 8)
+    const json = await response.json() as RxNavApproximateResponse
+    const remote = (json.approximateGroup?.candidate ?? [])
+      .map((item, index) => item.name ? {
+        id: `rxnav-medicine-${index}-${item.name}`,
+        title: item.name,
+        subtitle: 'Medicine suggestion from RxNorm/RxNav',
+        source: 'RxNav',
+      } : null)
+      .filter((item): item is SearchSuggestion => Boolean(item))
+
+    return unique([...local, ...remote].map((item) => item.title)).map((title) => [...local, ...remote].find((item) => item.title === title)!).slice(0, 8)
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') return []
+    return local.slice(0, 8)
+  }
+}
+
+async function fetchOpenFdaLabel(name: string) {
+  const clean = name.trim()
+  const fields = ['openfda.brand_name', 'openfda.generic_name', 'openfda.substance_name']
+  const searchTerms = await getRxNormSearchTerms(clean)
+
+  for (const term of searchTerms) {
+    for (const field of fields) {
+      const url = `https://api.fda.gov/drug/label.json?search=${field}:%22${encodeURIComponent(term)}%22&limit=1`
+      const response = await fetch(url)
+      if (!response.ok) continue
+      const json = (await response.json()) as OpenFdaResponse
+      const label = json.results?.[0]
+      if (label) return label
+    }
+  }
+
+  return null
+}
+
+async function lookupMedicineFromWeb(name: string, condition?: Condition): Promise<Medicine> {
+  const label = await fetchOpenFdaLabel(name)
+  if (!label) throw new Error('No public label found for that medicine name.')
+
+  const displayName = label.openfda?.brand_name?.[0] ?? label.openfda?.generic_name?.[0] ?? name
+  const indication = splitMedicalText(label.indications_and_usage ?? [], `Used for ${condition?.name ?? 'the selected condition'}.`, 2)[0]
+  const sideEffects = splitMedicalText(
+    [...(label.adverse_reactions ?? []), ...(label.patient_medication_information ?? [])],
+    'Side effects are listed in the public drug label and depend on dose and patient history.',
+    5,
+  )
+  const seriousSignals = splitMedicalText(
+    [...(label.boxed_warning ?? []), ...(label.warnings_and_cautions ?? []), ...(label.warnings ?? []), ...(label.contraindications ?? [])],
+    'Severe allergic reaction, breathing trouble, fainting, or rapidly worsening symptoms.',
+    4,
+  )
+  const affectedOrgans = inferOrgansFromLabel(label, condition)
+
+  return {
+    name: displayName,
+    conditionIds: condition ? [condition.id] : [],
+    route: inferRouteFromLabel(label),
+    purpose: indication,
+    onset: 'Label dependent',
+    duration: 'Label dependent',
+    affectedOrgans,
+    benefits: splitMedicalText(label.indications_and_usage ?? [], indication, 3),
+    sideEffects,
+    seriousSignals,
+    safety: splitMedicalText(
+      [...(label.warnings_and_cautions ?? []), ...(label.warnings ?? []), ...(label.precautions ?? [])],
+      'Use only as prescribed and verify warnings, interactions, pregnancy status, kidney/liver history, and allergies with a clinician.',
+      1,
+    )[0],
+    longTerm: {
+      '1 day': `${displayName} enters the body by its labeled route; early tolerance and allergy signals matter first.`,
+      '1 week': `The animation emphasizes ${affectedOrgans.slice(0, 3).join(', ')} while short-term benefit and side effects are watched.`,
+      '1 month': `Ongoing use shifts attention toward recurring adverse reactions and condition response.`,
+      '6 months': `Repeated exposure makes organ monitoring more important, especially ${affectedOrgans.slice(-3).join(', ')}.`,
+      '1 year': `Long-term use should be reviewed against benefit, dose, interactions, and patient-specific risk.`,
+      '5 years': `Multi-year exposure can change monitoring priorities as health history and other medicines evolve.`,
+      '10 years': `A decade view emphasizes cumulative benefit-risk review, organ surveillance, and whether the medicine is still needed.`,
+    },
+  }
+}
+
+function getMedicine(name: string, condition?: Condition): Medicine {
+  const known = medicineCatalog.find((item) => item.name === name)
+  if (known) return known
+
+  return buildFallbackMedicine(name, condition)
+}
+
 function IconStat({ icon: Icon, label, value }: { icon: typeof Activity; label: string; value: string }) {
   return (
     <div className="metric-tile">
@@ -439,12 +707,12 @@ function IconStat({ icon: Icon, label, value }: { icon: typeof Activity; label: 
 
 function StepRail({ step }: { step: AppStep }) {
   const steps: Array<[AppStep, string]> = [
-    ['auth', 'Account'],
+    ['auth', 'Access'],
     ['profile', 'Body'],
-    ['condition', 'Condition'],
-    ['medicine', 'Medicine'],
-    ['education', 'Consent'],
-    ['simulation', 'Animation'],
+    ['condition', 'Focus'],
+    ['medicine', 'Dose'],
+    ['education', 'Review'],
+    ['simulation', 'Live'],
   ]
   const activeIndex = steps.findIndex(([key]) => key === step)
 
@@ -469,8 +737,18 @@ export default function Home() {
   const [password, setPassword] = useState('password')
   const [profile, setProfile] = useState<Profile>(initialProfile)
   const [selectedConditionId, setSelectedConditionId] = useState('diabetes')
+  const [customCondition, setCustomCondition] = useState('')
+  const [conditionSuggestions, setConditionSuggestions] = useState<SearchSuggestion[]>([])
+  const [conditionSearchLoading, setConditionSearchLoading] = useState(false)
+  const [conditionSearchOpen, setConditionSearchOpen] = useState(false)
   const [medicine, setMedicine] = useState('Metformin')
   const [customMedicine, setCustomMedicine] = useState('')
+  const [medicineSuggestions, setMedicineSuggestions] = useState<SearchSuggestion[]>([])
+  const [medicineSearchLoading, setMedicineSearchLoading] = useState(false)
+  const [medicineSearchOpen, setMedicineSearchOpen] = useState(false)
+  const [webMedicine, setWebMedicine] = useState<Medicine | null>(null)
+  const [medicineLookupStatus, setMedicineLookupStatus] = useState<LookupStatus>('idle')
+  const [medicineLookupMessage, setMedicineLookupMessage] = useState('')
   const [timeIndex, setTimeIndex] = useState(0)
   const [isPlaying, setIsPlaying] = useState(true)
   const [speed, setSpeed] = useState(1)
@@ -488,12 +766,71 @@ export default function Home() {
     }
   }, [])
 
-  const selectedCondition = useMemo(() => conditionCatalog.find((item) => item.id === selectedConditionId) ?? conditionCatalog[0], [selectedConditionId])
+  useEffect(() => {
+    const query = customCondition.trim()
+    if (query.length < 2 || selectedConditionId !== 'custom') {
+      setConditionSuggestions([])
+      setConditionSearchLoading(false)
+      return
+    }
+
+    const controller = new AbortController()
+    setConditionSearchLoading(true)
+    const timeout = window.setTimeout(() => {
+      searchDiseaseSuggestions(query, controller.signal)
+        .then((items) => {
+          setConditionSuggestions(items)
+          setConditionSearchOpen(items.length > 0)
+        })
+        .catch(() => setConditionSuggestions([]))
+        .finally(() => setConditionSearchLoading(false))
+    }, 260)
+
+    return () => {
+      window.clearTimeout(timeout)
+      controller.abort()
+    }
+  }, [customCondition, selectedConditionId])
+
+  useEffect(() => {
+    const query = customMedicine.trim()
+    if (query.length < 2) {
+      setMedicineSuggestions([])
+      setMedicineSearchLoading(false)
+      return
+    }
+
+    const controller = new AbortController()
+    setMedicineSearchLoading(true)
+    const timeout = window.setTimeout(() => {
+      searchMedicineSuggestions(query, controller.signal)
+        .then((items) => {
+          setMedicineSuggestions(items)
+          setMedicineSearchOpen(items.length > 0)
+        })
+        .catch(() => setMedicineSuggestions([]))
+        .finally(() => setMedicineSearchLoading(false))
+    }, 260)
+
+    return () => {
+      window.clearTimeout(timeout)
+      controller.abort()
+    }
+  }, [customMedicine])
+
+  const selectedCondition = useMemo(
+    () => (selectedConditionId === 'custom' ? buildUniversalCondition(customCondition) : conditionCatalog.find((item) => item.id === selectedConditionId) ?? conditionCatalog[0]),
+    [customCondition, selectedConditionId],
+  )
   const recommendedMedicines = useMemo(
     () => medicineCatalog.filter((item) => item.conditionIds.includes(selectedCondition.id)),
     [selectedCondition.id],
   )
-  const selectedMedicine = useMemo(() => getMedicine(customMedicine || medicine, selectedCondition), [customMedicine, medicine, selectedCondition])
+  const selectedMedicine = useMemo(() => {
+    const requestedName = (customMedicine || medicine).trim()
+    if (webMedicine && requestedName && webMedicine.name.toLowerCase() === requestedName.toLowerCase()) return webMedicine
+    return getMedicine(requestedName, selectedCondition)
+  }, [customMedicine, medicine, selectedCondition, webMedicine])
   const signals = useMemo(() => bodySignals(profile), [profile])
   const highlightedOrgans = useMemo(
     () => unique([...selectedCondition.organs, ...selectedMedicine.affectedOrgans, ...profile.organConditions]),
@@ -520,8 +857,16 @@ export default function Home() {
     setStep('auth')
     setProfile(initialProfile)
     setSelectedConditionId('diabetes')
+    setCustomCondition('')
+    setConditionSuggestions([])
+    setConditionSearchOpen(false)
     setMedicine('Metformin')
     setCustomMedicine('')
+    setMedicineSuggestions([])
+    setMedicineSearchOpen(false)
+    setWebMedicine(null)
+    setMedicineLookupStatus('idle')
+    setMedicineLookupMessage('')
     setTimeIndex(0)
     setIsPlaying(true)
     setFocusMode('pathway')
@@ -529,9 +874,106 @@ export default function Home() {
 
   const chooseCondition = (condition: Condition) => {
     setSelectedConditionId(condition.id)
+    setCustomCondition('')
+    setConditionSuggestions([])
+    setConditionSearchOpen(false)
     setProfile({ ...profile, diseases: [condition.name], organConditions: condition.organs })
     setMedicine(condition.recommended[0])
     setCustomMedicine('')
+    setWebMedicine(null)
+    setMedicineLookupStatus('idle')
+    setMedicineLookupMessage('')
+  }
+
+  const chooseCustomCondition = (value: string) => {
+    const nextCondition = buildUniversalCondition(value)
+    setCustomCondition(value)
+    setSelectedConditionId('custom')
+    setConditionSearchOpen(value.trim().length >= 2)
+    setProfile({ ...profile, diseases: value.trim() ? [value.trim()] : [], organConditions: nextCondition.organs })
+    setMedicine('')
+    setCustomMedicine('')
+    setWebMedicine(null)
+    setMedicineLookupStatus('idle')
+    setMedicineLookupMessage('')
+  }
+
+  const selectConditionSuggestion = (suggestion: SearchSuggestion) => {
+    const nextCondition = buildUniversalCondition(suggestion.title)
+    setCustomCondition(suggestion.title)
+    setSelectedConditionId('custom')
+    setConditionSuggestions([])
+    setConditionSearchOpen(false)
+    setProfile({ ...profile, diseases: [suggestion.title], organConditions: nextCondition.organs })
+    setMedicine('')
+    setCustomMedicine('')
+    setWebMedicine(null)
+    setMedicineLookupStatus('idle')
+    setMedicineLookupMessage('')
+  }
+
+  const selectMedicine = (name: string) => {
+    setMedicine(name)
+    setCustomMedicine('')
+    setMedicineSuggestions([])
+    setMedicineSearchOpen(false)
+    setWebMedicine(null)
+    setMedicineLookupStatus('idle')
+    setMedicineLookupMessage('')
+  }
+
+  const handleCustomMedicineChange = (value: string) => {
+    setCustomMedicine(value)
+    setMedicineSearchOpen(value.trim().length >= 2)
+    setWebMedicine(null)
+    setMedicineLookupStatus('idle')
+    setMedicineLookupMessage('')
+  }
+
+  const importMedicineByName = async (name: string) => {
+    setMedicine(name)
+    setCustomMedicine('')
+    setMedicineSuggestions([])
+    setMedicineSearchOpen(false)
+    setMedicineLookupStatus('loading')
+    setMedicineLookupMessage(`Importing ${name} from public drug labels...`)
+
+    try {
+      const result = await lookupMedicineFromWeb(name, selectedCondition)
+      setWebMedicine(result)
+      setMedicine(result.name)
+      setMedicineLookupStatus('success')
+      setMedicineLookupMessage(`${result.name} imported into the simulator.`)
+    } catch (error) {
+      setWebMedicine(null)
+      setMedicineLookupStatus('error')
+      setMedicineLookupMessage(error instanceof Error ? error.message : 'Could not import that medicine label.')
+    }
+  }
+
+  const handleMedicineLookup = async () => {
+    const requestedName = (customMedicine || medicine).trim()
+    if (!requestedName) {
+      setMedicineLookupStatus('error')
+      setMedicineLookupMessage('Type a medicine name first.')
+      return
+    }
+
+    setMedicineLookupStatus('loading')
+    setMedicineLookupMessage('Searching public drug labels...')
+
+    try {
+      const result = await lookupMedicineFromWeb(requestedName, selectedCondition)
+      setWebMedicine(result)
+      setMedicine(result.name)
+      setCustomMedicine('')
+      setMedicineLookupStatus('success')
+      setMedicineLookupMessage('Public label imported into the simulator.')
+    } catch (error) {
+      setWebMedicine(null)
+      setMedicineLookupStatus('error')
+      setMedicineLookupMessage(error instanceof Error ? error.message : 'Could not import that medicine label.')
+    }
   }
 
   const stage = (
@@ -549,30 +991,51 @@ export default function Home() {
   )
 
   return (
-    <main className="app-shell min-h-screen text-white">
-      <div className="clinical-grid" />
+    <main className="chart-app">
+      <div className="chart-noise" aria-hidden />
 
-      <section className="relative z-10 grid min-h-screen grid-cols-1 gap-5 p-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(430px,0.78fr)] lg:p-6">
-        <div className="workspace-panel anatomy-workspace">
-          {stage}
-        </div>
+      <div className="chart-layout">
+        <aside className="chart-sidebar">
+          <div className="workspace-panel control-workspace">
+            <div className="chart-sidebar-scroll">
+              <div className="control-deck">
+            <header className="control-deck-header">
+              <div className="brand-lockup">
+                <span className="brand-badge">Educational simulation</span>
+                <h1>MediTwin Studio</h1>
+                <p className="brand-tagline">
+                  Calibrate a virtual patient, pick a condition and medicine, then explore route, organ emphasis, and time-based storytelling in 3D—built for learning,
+                  not diagnosis or prescribing.
+                </p>
+              </div>
+              {account ? (
+                <button type="button" className="icon-button" title="Reset session" onClick={resetProject} aria-label="Reset project">
+                  <RotateCcw size={18} />
+                </button>
+              ) : null}
+            </header>
 
-        <div className="workspace-panel control-workspace">
-          <div className="app-topbar">
-            <div>
-              <p className="eyebrow">MediTwin Studio</p>
-              <h1>Medicine anatomy simulator</h1>
-            </div>
-            {account && (
-              <button type="button" className="icon-button" onClick={resetProject} aria-label="Reset project">
-                <RotateCcw size={18} />
-              </button>
-            )}
-          </div>
+            {account ? (
+              <div className="session-strip">
+                <span className="session-pill">
+                  <User size={14} strokeWidth={2.25} aria-hidden /> {account.name}
+                </span>
+                {step !== 'auth' && step !== 'profile' ? (
+                  <span className="session-pill session-pill--accent">
+                    <Stethoscope size={14} strokeWidth={2.25} aria-hidden /> {selectedCondition.name}
+                  </span>
+                ) : null}
+                {step === 'education' || step === 'simulation' ? (
+                  <span className="session-pill">
+                    <Pill size={14} strokeWidth={2.25} aria-hidden /> {selectedMedicine.name}
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
 
-          <StepRail step={step} />
+            <StepRail step={step} />
 
-          <AnimatePresence mode="wait">
+            <AnimatePresence mode="wait">
             {step === 'auth' && (
               <motion.form key="auth" className="flow-panel" onSubmit={handleAuth} initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }}>
                 <div className="segmented-control">
@@ -586,6 +1049,10 @@ export default function Home() {
                 <div>
                   <h2>{authMode === 'login' ? 'Welcome back.' : 'Create your patient workspace.'}</h2>
                   <p className="panel-copy">Use any account details for this demo. The session is stored locally on this device.</p>
+                </div>
+                <div className="insight-callout">
+                  <ShieldCheck size={18} aria-hidden />
+                  <span>This demo stores a lightweight session in your browser only. Use fictional credentials—nothing here replaces your care team or pharmacy counseling.</span>
                 </div>
                 <label className="field-label">
                   Name
@@ -699,8 +1166,36 @@ export default function Home() {
               <motion.div key="condition" className="flow-panel" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }}>
                 <div>
                   <p className="eyebrow">Clinical focus</p>
-                  <h2>Select a disease or condition.</h2>
-                  <p className="panel-copy">The selected condition determines recommended medicines, target organs, side-effect watchpoints, and animation emphasis.</p>
+                  <h2>Select or type any disease.</h2>
+                  <p className="panel-copy">Use the starter cards for common cases, or type any disease/condition to build a universal organ map for the animation.</p>
+                </div>
+                <div className="field-label search-field">
+                  <span>Universal disease / condition</span>
+                  <div className="smart-search">
+                    <Search size={17} aria-hidden />
+                    <input
+                      value={customCondition}
+                      onChange={(event) => chooseCustomCondition(event.target.value)}
+                      onFocus={() => setConditionSearchOpen(conditionSuggestions.length > 0)}
+                      placeholder="Search any disease, symptom, or diagnosis"
+                      className="field-input smart-search__input"
+                      autoComplete="off"
+                    />
+                    {conditionSearchLoading ? <LoaderCircle size={17} className="smart-search__spinner" aria-hidden /> : null}
+                  </div>
+                  {conditionSearchOpen && conditionSuggestions.length > 0 ? (
+                    <div className="suggestion-box">
+                      {conditionSuggestions.map((suggestion) => (
+                        <button key={suggestion.id} type="button" className="suggestion-item" onClick={() => selectConditionSuggestion(suggestion)}>
+                          <span>
+                            <strong>{suggestion.title}</strong>
+                            <small>{suggestion.subtitle}</small>
+                          </span>
+                          <em>{suggestion.source}</em>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
                 <div className="condition-grid">
                   {conditionCatalog.map((condition) => {
@@ -732,12 +1227,12 @@ export default function Home() {
               <motion.div key="medicine" className="flow-panel" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }}>
                 <div>
                   <p className="eyebrow">{selectedCondition.name}</p>
-                  <h2>Choose or enter a prescribed medicine.</h2>
-                  <p className="panel-copy">Recommended options are shown first. You can also type a custom medicine name and still run a condition-based educational simulation.</p>
+                  <h2>Choose or import any medicine.</h2>
+                  <p className="panel-copy">Recommended options stay here for speed. For universal mode, type a medicine name and import its public label to update organs, side effects, warnings, and route.</p>
                 </div>
                 <div className="medicine-list">
                   {recommendedMedicines.map((item) => (
-                    <button key={item.name} type="button" onClick={() => { setMedicine(item.name); setCustomMedicine('') }} className={`medicine-card ${selectedMedicine.name === item.name ? 'medicine-card-active' : ''}`}>
+                    <button key={item.name} type="button" onClick={() => selectMedicine(item.name)} className={`medicine-card ${selectedMedicine.name === item.name ? 'medicine-card-active' : ''}`}>
                       <div>
                         <strong>{item.name}</strong>
                         <span>{item.purpose}</span>
@@ -746,10 +1241,43 @@ export default function Home() {
                     </button>
                   ))}
                 </div>
-                <label className="field-label">
-                  Custom medicine
-                  <input value={customMedicine} onChange={(event) => setCustomMedicine(event.target.value)} placeholder="Example: cetirizine, azithromycin, aspirin" className="field-input" />
-                </label>
+                <div className="field-label search-field">
+                  <span>Universal medicine lookup</span>
+                  <div className="smart-search">
+                    <Search size={17} aria-hidden />
+                    <input
+                      value={customMedicine}
+                      onChange={(event) => handleCustomMedicineChange(event.target.value)}
+                      onFocus={() => setMedicineSearchOpen(medicineSuggestions.length > 0)}
+                      placeholder="Search any medicine, generic, or brand"
+                      className="field-input smart-search__input"
+                      autoComplete="off"
+                    />
+                    {medicineSearchLoading ? <LoaderCircle size={17} className="smart-search__spinner" aria-hidden /> : null}
+                  </div>
+                  {medicineSearchOpen && medicineSuggestions.length > 0 ? (
+                    <div className="suggestion-box">
+                      {medicineSuggestions.map((suggestion) => (
+                        <button key={suggestion.id} type="button" className="suggestion-item" onClick={() => importMedicineByName(suggestion.title)}>
+                          <span>
+                            <strong>{suggestion.title}</strong>
+                            <small>{suggestion.subtitle}</small>
+                          </span>
+                          <em>{suggestion.source}</em>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+                <div className={`lookup-panel lookup-panel--${medicineLookupStatus}`}>
+                  <div>
+                    <Globe2 size={17} aria-hidden />
+                    <span>{medicineLookupMessage || 'Import public drug-label data for typed medicines.'}</span>
+                  </div>
+                  <button type="button" className="ghost-button" onClick={handleMedicineLookup} disabled={medicineLookupStatus === 'loading'}>
+                    {medicineLookupStatus === 'loading' ? 'Importing...' : 'Import label'}
+                  </button>
+                </div>
                 <div className="medicine-summary">
                   <div><span>Route</span><strong>{selectedMedicine.route}</strong></div>
                   <div><span>Onset</span><strong>{selectedMedicine.onset}</strong></div>
@@ -802,38 +1330,113 @@ export default function Home() {
             )}
 
             {step === 'simulation' && (
-              <motion.div key="simulation" className="flow-panel simulation-panel" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }}>
-                <div>
-                  <p className="eyebrow">{selectedCondition.name}</p>
-                  <h2>{selectedMedicine.name} pathway.</h2>
+              <motion.div
+                key="simulation"
+                className="flow-panel flow-panel--sim simulation-panel"
+                initial={{ opacity: 0, y: 18 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -12 }}
+              >
+                <header>
+                  <p className="eyebrow eyebrow--inline">
+                    <Microscope size={14} strokeWidth={2.25} aria-hidden />
+                    Live simulation deck
+                  </p>
+                  <h2>{selectedMedicine.name}</h2>
                   <p className="panel-copy">{selectedMedicine.purpose}</p>
-                </div>
-
-                <div className="playbar">
-                  <button type="button" className="primary-button" onClick={() => setIsPlaying(!isPlaying)}>
-                    {isPlaying ? <Pause size={18} /> : <Play size={18} />} {isPlaying ? 'Pause' : 'Play'}
-                  </button>
-                  <label>
-                    Speed
-                    <input type="range" min={0.5} max={2} step={0.1} value={speed} onChange={(event) => setSpeed(Number(event.target.value))} />
-                    <span>{speed.toFixed(1)}x</span>
-                  </label>
-                </div>
-
-                <div className="segmented-control">
-                  {(['overview', 'pathway', 'sideEffects'] as FocusMode[]).map((mode) => (
-                    <button key={mode} type="button" className={focusMode === mode ? 'segment-active' : ''} onClick={() => setFocusMode(mode)}>
-                      {mode === 'overview' ? 'Overview' : mode === 'pathway' ? 'Pathway' : 'Side effects'}
-                    </button>
-                  ))}
-                </div>
-
-                <div>
-                  <div className="timeline-head">
-                    <span>Projected use</span>
-                    <strong>{timelineLabel}</strong>
+                  <div className="sim-hero-meta">
+                    <span className="dose-chip">
+                      <BookOpen size={13} aria-hidden /> {selectedCondition.name}
+                    </span>
+                    <span className="dose-chip" style={{ borderColor: 'rgba(45, 212, 191, 0.35)', background: 'rgba(45, 212, 191, 0.1)', color: '#ccfbf1' }}>
+                      <Pill size={13} aria-hidden /> {selectedMedicine.route}
+                    </span>
                   </div>
-                  <input type="range" min={0} max={timeline.length - 1} value={timeIndex} onChange={(event) => setTimeIndex(Number(event.target.value))} className="cinematic-range" />
+                </header>
+
+                <div className="insight-callout">
+                  <BadgeInfo size={18} aria-hidden />
+                  <span>
+                    Use the lens buttons to switch visualization modes on the same mesh: overview balances anatomy, pathway emphasizes the dose corridor, and burden highlights
+                    risk-weighted organs. Timeline scrubs educational copy only—always verify real dosing with a clinician.
+                  </span>
+                </div>
+
+                <div className="sim-deck sim-deck--split">
+                  <div className="sim-card">
+                    <p className="sim-card__label">
+                      <Zap size={14} aria-hidden /> Transport
+                    </p>
+                    <div className="playbar-premium">
+                      <div className="playbar-premium__main">
+                        <button type="button" className="play-toggle" data-playing={isPlaying} onClick={() => setIsPlaying(!isPlaying)}>
+                          {isPlaying ? <Pause size={18} /> : <Play size={18} />}
+                          {isPlaying ? 'Pause' : 'Play'}
+                        </button>
+                      </div>
+                      <div className="play-slider-block">
+                        <label htmlFor="sim-speed">
+                          Rate <output>{speed.toFixed(1)}×</output>
+                        </label>
+                        <input
+                          id="sim-speed"
+                          type="range"
+                          min={0.5}
+                          max={2}
+                          step={0.1}
+                          value={speed}
+                          onChange={(event) => setSpeed(Number(event.target.value))}
+                          className="cinematic-range"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="sim-card sim-card--lens">
+                    <p className="sim-card__label">
+                      <Layers size={14} aria-hidden /> Visualization lens
+                    </p>
+                    <div className="focus-modes">
+                      {(
+                        [
+                          { id: 'overview' as const, title: 'Overview', desc: 'All organs', Icon: Layers },
+                          { id: 'pathway' as const, title: 'Pathway', desc: 'Dose route', Icon: Route },
+                          { id: 'sideEffects' as const, title: 'Side effects', desc: 'Risk map', Icon: AlertTriangle },
+                        ] as const
+                      ).map(({ id, title, desc, Icon }) => (
+                        <button
+                          key={id}
+                          type="button"
+                          className={`focus-mode-btn ${focusMode === id ? 'focus-mode-btn--active' : ''}`}
+                          onClick={() => setFocusMode(id)}
+                        >
+                          <span className="focus-mode-btn__icon">
+                            <Icon size={15} strokeWidth={2.2} aria-hidden />
+                          </span>
+                          <span className="focus-mode-btn__copy">
+                            <strong>{title}</strong>
+                            <small>{desc}</small>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="sim-card timeline-rail">
+                  <div className="timeline-rail__head">
+                    <span className="timeline-rail__phase">Longitudinal narrative</span>
+                    <strong className="timeline-rail__value">{timelineLabel}</strong>
+                  </div>
+                  <p className="timeline-rail__hint">Scrub the arc from first dose to years of monitoring—each stop updates the companion text and animation intensity.</p>
+                  <input
+                    type="range"
+                    min={0}
+                    max={timeline.length - 1}
+                    value={timeIndex}
+                    onChange={(event) => setTimeIndex(Number(event.target.value))}
+                    className="cinematic-range"
+                  />
                   <div className="timeline-labels">
                     {timeline.map((item, index) => (
                       <button key={item} type="button" className={timeIndex === index ? 'timeline-label-active' : ''} onClick={() => setTimeIndex(index)}>
@@ -844,41 +1447,64 @@ export default function Home() {
                 </div>
 
                 <div className="timeline-card">
-                  <Clock3 size={20} />
+                  <Clock3 size={20} aria-hidden />
                   <p>{longTermCopy}</p>
                 </div>
 
                 <div className="two-column">
                   <section>
-                    <h3>Benefits</h3>
-                    {selectedMedicine.benefits.map((item) => <p key={item}><CheckCircle2 size={15} /> {item}</p>)}
+                    <h3>Therapeutic upside</h3>
+                    {selectedMedicine.benefits.map((item) => (
+                      <p key={item}>
+                        <CheckCircle2 size={15} aria-hidden /> {item}
+                      </p>
+                    ))}
                   </section>
                   <section>
-                    <h3>Side effects</h3>
-                    {selectedMedicine.sideEffects.map((item) => <p key={item}><AlertTriangle size={15} /> {item}</p>)}
+                    <h3>Common effects</h3>
+                    {selectedMedicine.sideEffects.map((item) => (
+                      <p key={item}>
+                        <AlertTriangle size={15} aria-hidden /> {item}
+                      </p>
+                    ))}
                   </section>
                 </div>
 
                 <div className="danger-list">
-                  <strong>Urgent warning signs</strong>
+                  <strong>Stop and seek urgent care if…</strong>
                   <div>{selectedMedicine.seriousSignals.map((item) => <span key={item}>{item}</span>)}</div>
                 </div>
 
-                <div className="organ-chip-row">
-                  {highlightedOrgans.map((organ) => <span key={organ}>{organ}</span>)}
+                <div>
+                  <p className="sim-card__label" style={{ marginBottom: '0.45rem' }}>
+                    <Sparkles size={14} aria-hidden /> Organs in frame
+                  </p>
+                  <div className="organ-chip-row">{highlightedOrgans.map((organ) => <span key={organ}>{organ}</span>)}</div>
                 </div>
 
                 <div className="button-row">
-                  <button type="button" className="ghost-button" onClick={() => setStep('education')}>Back</button>
+                  <button type="button" className="ghost-button" onClick={() => setStep('education')}>
+                    Back
+                  </button>
                   <button type="button" className="primary-button" onClick={resetProject}>
-                    <RotateCcw size={18} /> New patient
+                    <RotateCcw size={18} /> New patient journey
                   </button>
                 </div>
               </motion.div>
             )}
-          </AnimatePresence>
+            </AnimatePresence>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        <div className="chart-stage-wrap">
+          <div className="workspace-panel anatomy-workspace chart-stage-frame">
+            {stage}
+          </div>
+          <p className="chart-stage-label">Anatomical model · BodyParts3D (research / education)</p>
         </div>
-      </section>
+      </div>
     </main>
   )
 }

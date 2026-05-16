@@ -376,6 +376,16 @@ Simply extract, integrate, and animate! 🎉
 
 ---
 
+## BodyParts3D: more liver coverage (meshes)
+
+This project’s liver is assembled from **BodyParts3D** OBJ slices (segment Ia–VIII, portal/hepatic branches). The database labels many more hepatic structures; if lobes still look sparse on screen:
+
+1. **Source:** [BodyParts3D / 3D anatomy ontology](https://dbarchive.biosciencedbc.jp/en/bodyparts3d/) (FBX/OBJ downloads; academic use — follow their terms).
+2. **Add files** under `frontend/public/models/bodyparts3d/liver/` (or a subfolder), matching existing naming.
+3. **Register** each mesh in `frontend/src/lib/anatomy-catalog.ts` as additional `asset('liver', …)` rows with `group: 'liver'` and tuned `opacity` / `layer` (`organ` vs `vascular`) so vessels read clearly next to parenchyma.
+
+---
+
 ## 📖 Attribution Requirements
 
 Most resources require attribution (but no complex licensing):

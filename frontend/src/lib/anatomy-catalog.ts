@@ -66,7 +66,7 @@ export const groupStyle: Record<OrganGroup, { color: string; opacity: number }> 
   respiratory: { color: '#ff8b54', opacity: 0.9 },
   lungs: { color: '#ff9d6e', opacity: 0.72 },
   esophagus: { color: '#e58b6f', opacity: 0.9 },
-  liver: { color: '#a23d2f', opacity: 0.96 },
+  liver: { color: '#a23d2f', opacity: 1 },
   gallbladder: { color: '#60bf70', opacity: 0.94 },
   stomach: { color: '#f18f36', opacity: 0.94 },
   pancreas: { color: '#f2c36f', opacity: 0.93 },
@@ -142,6 +142,8 @@ export const ANATOMY_ASSETS: AnatomyAsset[] = [
   asset('respiratory', 'Right lateral basal bronchial tree', f('respiratory', 'FJ2455'), 0.86, { layer: 'detail' }),
   asset('respiratory', 'Right superior segmental bronchial tree', f('respiratory', 'FJ2452'), 0.86, { layer: 'detail' }),
   asset('respiratory', 'Inferior lingular bronchial tree', f('respiratory', 'FJ2441'), 0.84, { layer: 'detail' }),
+  asset('respiratory', 'Superior lingular bronchial tree', f('respiratory', 'FJ2442'), 0.84, { layer: 'detail' }),
+  asset('respiratory', 'Right medial basal bronchial tree', f('respiratory', 'FJ2457'), 0.84, { layer: 'detail' }),
 
   // —— Lungs ——
   asset('lungs', 'Left bronchial tree', f('lungs', 'FJ2479'), undefined, { layer: 'organ' }),
@@ -177,9 +179,9 @@ export const ANATOMY_ASSETS: AnatomyAsset[] = [
   asset('liver', 'Liver segment IV', f('liver', 'FJ2820'), undefined, { layer: 'organ' }),
   asset('liver', 'Liver segment V', f('liver', 'FJ2821'), undefined, { layer: 'organ' }),
   asset('liver', 'Liver segment VI', f('liver', 'FJ2822'), undefined, { layer: 'organ' }),
-  asset('liver', 'Portal liver structure', f('liver', 'FJ1883'), 0.88, { layer: 'vascular' }),
-  asset('liver', 'Hepatic branch', f('liver', 'FJ1893'), 0.86, { layer: 'vascular' }),
-  asset('liver', 'Intrahepatic branch', f('liver', 'FJ1913'), 0.84, { layer: 'vascular' }),
+  asset('liver', 'Portal liver structure', f('liver', 'FJ1883'), 0.92, { layer: 'vascular' }),
+  asset('liver', 'Hepatic branch', f('liver', 'FJ1893'), 0.9, { layer: 'vascular' }),
+  asset('liver', 'Intrahepatic branch', f('liver', 'FJ1913'), 0.88, { layer: 'vascular' }),
 
   // —— Kidneys & bladder ——
   asset('kidneys', 'Left kidney', f('kidneys', 'FJ3145'), undefined, { layer: 'organ' }),
@@ -207,6 +209,7 @@ export const ANATOMY_ASSETS: AnatomyAsset[] = [
   asset('largeIntestine', 'Sigmoid colon', f('large-intestine', 'FJ2568'), undefined, { layer: 'organ' }),
   asset('largeIntestine', 'Hepatic flexure', f('large-intestine', 'FJ2569'), undefined, { layer: 'organ' }),
   asset('largeIntestine', 'Splenic flexure', f('large-intestine', 'FJ2570'), undefined, { layer: 'organ' }),
+  asset('largeIntestine', 'Colon surface detail', f('large-intestine', 'FJ2599'), 0.76, { layer: 'detail' }),
   asset('appendix', 'Appendix', f('large-intestine', 'FJ2565'), undefined, { layer: 'organ' }),
 
   // —— Vessels ——
@@ -231,16 +234,31 @@ export const ANATOMY_ASSETS: AnatomyAsset[] = [
   asset('skeleton', 'Thoracic vertebra', f('skeleton', 'FJ3166'), 0.44, { layer: 'skeletal' }),
   asset('skeleton', 'Lumbar vertebra', f('skeleton', 'FJ3162'), 0.44, { layer: 'skeletal' }),
   asset('skeleton', 'Sacral vertebra', f('skeleton', 'FJ3161'), 0.4, { layer: 'skeletal' }),
+  asset('skeleton', 'Lower rib segment', f('skeleton', 'FJ3153'), 0.3, { layer: 'skeletal' }),
+  asset('skeleton', 'Costal segment II', f('skeleton', 'FJ3154'), 0.3, { layer: 'skeletal' }),
+  asset('skeleton', 'Costal segment III', f('skeleton', 'FJ3155'), 0.3, { layer: 'skeletal' }),
+  asset('skeleton', 'Costal segment IV', f('skeleton', 'FJ3156'), 0.3, { layer: 'skeletal' }),
+  asset('skeleton', 'Costal segment V', f('skeleton', 'FJ3157'), 0.3, { layer: 'skeletal' }),
+  asset('skeleton', 'Costal segment VI', f('skeleton', 'FJ3158'), 0.3, { layer: 'skeletal' }),
+  asset('skeleton', 'Costal segment VII', f('skeleton', 'FJ3159'), 0.3, { layer: 'skeletal' }),
+  asset('skeleton', 'Costal segment VIII', f('skeleton', 'FJ3160'), 0.3, { layer: 'skeletal' }),
   asset('spinalCord', 'Central canal of spinal cord', f('spinal-cord', 'FJ1737'), undefined, { layer: 'detail' }),
   asset('diaphragm', 'Diaphragm', f('diaphragm', 'FJ3131'), 0.5, { layer: 'organ' }),
 
   // —— Eyes ——
+  asset('eyes', 'Left lens', f('eyes', 'FJ1282'), 0.76, { layer: 'detail' }),
   asset('eyes', 'Left sclera', f('eyes', 'FJ1317'), undefined, { layer: 'detail' }),
   asset('eyes', 'Left cornea', f('eyes', 'FJ1289'), 0.7, { layer: 'detail' }),
   asset('eyes', 'Right sclera', f('eyes', 'FJ1320'), undefined, { layer: 'detail' }),
   asset('eyes', 'Right choroid', f('eyes', 'FJ1336'), 0.75, { layer: 'detail' }),
   asset('eyes', 'Left iris', f('eyes', 'FJ1285'), 0.82, { layer: 'detail' }),
   asset('eyes', 'Right iris', f('eyes', 'FJ1286'), 0.82, { layer: 'detail' }),
+  asset('eyes', 'Right lens', f('eyes', 'FJ1297'), 0.76, { layer: 'detail' }),
+  asset('eyes', 'Left retina', f('eyes', 'FJ1299'), 0.72, { layer: 'detail' }),
+  asset('eyes', 'Right retina', f('eyes', 'FJ1305'), 0.72, { layer: 'detail' }),
+  asset('eyes', 'Left optic detail', f('eyes', 'FJ1331'), 0.72, { layer: 'detail' }),
+  asset('eyes', 'Right optic detail', f('eyes', 'FJ1337'), 0.72, { layer: 'detail' }),
+  asset('eyes', 'Ocular surface detail', f('eyes', 'FJ1340'), 0.72, { layer: 'detail' }),
 
   // —— Reproductive (male adult) ——
   asset('prostate', 'Prostate', f('prostate', 'FJ3139'), undefined, { maleOnly: true, adultOnly: true, layer: 'organ' }),

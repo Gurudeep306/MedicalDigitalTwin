@@ -46,20 +46,34 @@ export const AnimationControlWindow: React.FC<AnimationControlProps> = ({
   onSideEffectChange,
 }) => {
   const [expandedSection, setExpandedSection] = useState<string | null>('playback')
+  const [isHidden, setIsHidden] = useState(false)
 
   const toggleSection = useCallback((section: string) => {
     setExpandedSection(expandedSection === section ? null : section)
   }, [expandedSection])
 
+  if (isHidden) {
+    return (
+      <button
+        type="button"
+        className={styles.restoreBtn}
+        onClick={() => setIsHidden(false)}
+        title="Show anatomy command"
+      >
+        Show command
+      </button>
+    )
+  }
+
   return (
     <div className={styles.controlWindow}>
       {/* Header */}
       <div className={styles.header}>
-        <h2 className={styles.title}>🫀 Animation Control Center</h2>
+        <h2 className={styles.title}>Anatomy Command</h2>
         <button
           className={styles.minimizeBtn}
-          onClick={() => setExpandedSection(null)}
-          title="Minimize"
+          onClick={() => setIsHidden(true)}
+          title="Hide anatomy command"
         >
           −
         </button>
@@ -71,7 +85,7 @@ export const AnimationControlWindow: React.FC<AnimationControlProps> = ({
           className={styles.sectionHeader}
           onClick={() => toggleSection('playback')}
         >
-          <span className={styles.icon}>▶</span>
+          <span className={styles.icon}>PLAY</span>
           <span>Playback</span>
           <span className={styles.arrow}>{expandedSection === 'playback' ? '▼' : '▶'}</span>
         </button>
@@ -121,7 +135,7 @@ export const AnimationControlWindow: React.FC<AnimationControlProps> = ({
           className={styles.sectionHeader}
           onClick={() => toggleSection('scenario')}
         >
-          <span className={styles.icon}>🎭</span>
+          <span className={styles.icon}>MODE</span>
           <span>Scenario</span>
           <span className={styles.arrow}>{expandedSection === 'scenario' ? '▼' : '▶'}</span>
         </button>
@@ -133,10 +147,10 @@ export const AnimationControlWindow: React.FC<AnimationControlProps> = ({
               onChange={(e) => onScenarioChange(e.target.value)}
               className={styles.select}
             >
-              <option value="restingState">😴 Resting State</option>
-              <option value="activeState">🏃 Active State</option>
-              <option value="stressedState">😰 Stressed State</option>
-              <option value="postMealState">🍽️ Post-Meal State</option>
+              <option value="restingState">Resting State</option>
+              <option value="activeState">Active State</option>
+              <option value="stressedState">Stressed State</option>
+              <option value="postMealState">Post-Meal State</option>
             </select>
 
             <div className={styles.scenarioDescription}>
@@ -163,7 +177,7 @@ export const AnimationControlWindow: React.FC<AnimationControlProps> = ({
           className={styles.sectionHeader}
           onClick={() => toggleSection('effects')}
         >
-          <span className={styles.icon}>✨</span>
+          <span className={styles.icon}>FX</span>
           <span>Effects</span>
           <span className={styles.arrow}>{expandedSection === 'effects' ? '▼' : '▶'}</span>
         </button>
@@ -220,7 +234,7 @@ export const AnimationControlWindow: React.FC<AnimationControlProps> = ({
                     sideEffectIntensity > 0.6 ? styles.severe : sideEffectIntensity > 0.3 ? styles.moderate : styles.mild
                   }`}
                 >
-                  {sideEffectIntensity > 0.6 ? '⚠️ Severe' : sideEffectIntensity > 0.3 ? '⚠️ Moderate' : '⚠️ Mild'}
+                  {sideEffectIntensity > 0.6 ? 'Severe signal' : sideEffectIntensity > 0.3 ? 'Moderate signal' : 'Mild signal'}
                 </div>
               </div>
             )}
@@ -235,7 +249,7 @@ export const AnimationControlWindow: React.FC<AnimationControlProps> = ({
             className={styles.sectionHeader}
             onClick={() => toggleSection('medicine')}
           >
-            <span className={styles.icon}>💊</span>
+            <span className={styles.icon}>MED</span>
             <span>Medicine</span>
             <span className={styles.arrow}>{expandedSection === 'medicine' ? '▼' : '▶'}</span>
           </button>
@@ -256,9 +270,9 @@ export const AnimationControlWindow: React.FC<AnimationControlProps> = ({
 
       {/* Footer */}
       <div className={styles.footer}>
-        <div className={styles.footerText}>Animation System v2.0</div>
-        <div className={styles.indicator} style={{ background: isPlaying ? '#4ade80' : '#gray' }}>
-          {isPlaying ? '🔴 Recording' : '⊙ Ready'}
+        <div className={styles.footerText}>Animation System v2.1</div>
+        <div className={styles.indicator} data-live={isPlaying} style={{ background: isPlaying ? '#14b8a6' : '#64748b' }}>
+          {isPlaying ? 'Live' : 'Ready'}
         </div>
       </div>
     </div>
